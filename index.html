@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>13-Run Pool Tracker — 2026 MLB Season</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3352;
+    --text: #e8eaf6;
+    --muted: #8b90a7;
+    --green: #22c55e;
+    --gold: #f59e0b;
+  }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px 16px; max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 1.7rem; font-weight: 700; letter-spacing: -0.5px; }
+  h2 { font-size: 1.1rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+  .header { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 32px; }
+  .header-meta { color: var(--muted); font-size: 0.85rem; text-align: right; line-height: 1.6; }
+  .section { margin-bottom: 40px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+
+  /* Badges */
+  .badges { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  .badge { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; }
+  .badge-val { font-size: 1.4rem; font-weight: 700; }
+  .badge-label { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+
+  /* Leader */
+  .leader-box { background: linear-gradient(135deg, var(--surface2), var(--surface)); border: 1px solid #f59e0b55; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; }
+  .leader-label { color: var(--gold); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+  .leader-team { font-size: 1.1rem; font-weight: 700; }
+  .leader-detail { font-size: 0.85rem; color: var(--muted); }
+
+  /* Standings */
+  .standings-table { width: 100%; border-collapse: collapse; }
+  .standings-table th { background: var(--surface2); color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); cursor: default; }
+  .standings-table td { padding: 10px 12px; border-bottom: 1px solid #2e335222; vertical-align: middle; font-size: 0.9rem; }
+  .standings-table tr:last-child td { border-bottom: none; }
+  .standings-table tr:hover td { background: var(--surface2); }
+  .rank { color: var(--muted); font-size: 0.8rem; width: 32px; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; }
+  .team-name { display: flex; align-items: center; white-space: nowrap; font-weight: 500; }
+  .abbr { display: none; }
+  .slots-cell { min-width: 200px; }
+  .slots-num { font-weight: 700; font-size: 0.95rem; margin-right: 8px; }
+  .slot-pips { display: inline-flex; gap: 3px; vertical-align: middle; }
+  .pip { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .pip.filled { opacity: 0.9; }
+  .pip.empty { background: var(--surface2); border: 1px solid var(--border); }
+  .missing-cell { color: var(--muted); font-size: 0.82rem; }
+  .prob-cell { min-width: 150px; }
+  .prob-bar-wrap { background: var(--surface2); border-radius: 4px; height: 6px; width: 80px; display: inline-block; vertical-align: middle; margin-right: 8px; }
+  .prob-bar { height: 6px; border-radius: 4px; min-width: 2px; }
+  .prob-num { font-size: 0.88rem; font-weight: 600; }
+  .avg-cell { color: var(--muted); font-size: 0.85rem; }
+
+  /* Grid */
+  .grid-wrap { overflow-x: auto; }
+  .grid-table { border-collapse: collapse; min-width: 700px; width: 100%; }
+  .grid-table th { background: var(--surface2); color: var(--muted); font-size: 0.72rem; padding: 8px 4px; text-align: center; border: 1px solid var(--border); min-width: 32px; }
+  .slot-header.difficulty-common { color: #22c55e; }
+  .slot-header.difficulty-moderate { color: #f59e0b; }
+  .slot-header.difficulty-rare { color: #f97316; }
+  .slot-header.difficulty-very.rare { color: #ef4444; }
+  .grid-table .grid-team { padding: 6px 10px; white-space: nowrap; font-size: 0.82rem; font-weight: 500; border: 1px solid var(--border); }
+  .grid-table td { border: 1px solid #2e335233; text-align: center; padding: 0; height: 32px; }
+  .grid-total { font-size: 0.75rem; color: var(--muted); padding: 4px 6px !important; width: 42px; }
+  .grid-cell { cursor: default; transition: opacity 0.15s; }
+  .grid-cell:hover { opacity: 0.65; }
+  .grid-cell.empty { background: var(--surface); }
+  .grid-cell.empty.difficulty-rare { background: #1a1520; }
+  .grid-cell.empty.difficulty-very { background: #1a1118; }
+  .grid-cell.claimed.first .check::after { content: '★'; font-size: 7px; vertical-align: super; margin-left: 1px; }
+  .check { font-size: 0.95rem; }
+
+  /* First claims */
+  .claims-table { width: 100%; border-collapse: collapse; }
+  .claims-table th { background: var(--surface2); color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+  .claims-table td { padding: 9px 12px; border-bottom: 1px solid #2e335222; font-size: 0.88rem; vertical-align: middle; }
+  .claims-table tr:last-child td { border-bottom: none; }
+  .slot-num { font-weight: 700; font-size: 1rem; width: 40px; }
+  .unclaimed { color: var(--muted); font-style: italic; }
+
+  /* Difficulty badges */
+  .diff-badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+  .diff-badge.common { background: #22c55e22; color: #22c55e; }
+  .diff-badge.moderate { background: #f59e0b22; color: #f59e0b; }
+  .diff-badge.rare { background: #f9731622; color: #f97316; }
+  .diff-badge.very.rare { background: #ef444422; color: #ef4444; }
+
+  /* Prob note */
+  .prob-note { background: var(--surface2); border-left: 3px solid var(--border); border-radius: 4px; padding: 10px 14px; font-size: 0.82rem; color: var(--muted); margin-bottom: 14px; }
+
+  @media (max-width: 640px) {
+    .full { display: none; }
+    .abbr { display: inline; }
+    .slot-pips .pip { width: 9px; height: 9px; }
+    h1 { font-size: 1.3rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>⚾ 13-Run Pool Tracker</h1>
+    <div style="color:var(--muted);margin-top:4px;font-size:0.9rem;">2026 MLB Season · First team to score 0–13 runs in separate games wins</div>
+  </div>
+  <div class="header-meta">
+    Last updated: 2026-04-09<br>
+    Games processed: 187<br>
+    Simulations: 10,000
+  </div>
+</div>
+
+<div class="badges">
+  <div class="badge"><div class="badge-val">8/14</div><div class="badge-label">Leader slots</div></div>
+  <div class="badge"><div class="badge-val">14/14</div><div class="badge-label">Slots claimed (league)</div></div>
+  <div class="badge"><div class="badge-val">30</div><div class="badge-label">Teams active</div></div>
+  <div class="badge"><div class="badge-val">187</div><div class="badge-label">Games played</div></div>
+</div>
+
+<div class="leader-box">
+  <div style="font-size:1.6rem">🏆</div>
+  <div>
+    <div class="leader-label">Current Leader (by win probability)</div>
+    <div class="leader-team" style="color:#003831">Athletics</div>
+    <div class="leader-detail">8/14 slots · 17.4% win probability</div>
+  </div>
+</div>
+
+<!-- STANDINGS -->
+<div class="section">
+  <h2>Standings — sorted by win probability</h2>
+  <div class="prob-note">
+    Win % = Monte Carlo simulation (10,000 runs). Probabilities use a historical MLB run distribution as a prior
+    (scoring 13 runs ≈ 0.5% chance/game vs. scoring 4 runs ≈ 14%), blended with 2026 team data.
+    The race runs until any team completes all 14 slots — it may extend beyond one season.
+    "Avg games" = expected games from today until that team finishes.
+  </div>
+  <div class="card">
+    <table class="standings-table">
+      <thead>
+        <tr>
+          <th></th>
+          <th>Team</th>
+          <th>Slots filled</th>
+          <th>Still needs</th>
+          <th>Win probability</th>
+          <th>Avg games to finish</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="rank">#1</td>
+          <td class="team-name">
+            <span class="dot" style="background:#003831"></span>
+            <span class="full">Athletics</span>
+            <span class="abbr">ATH</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">8/14</span>
+            <div class="slot-pips"><span class="pip filled" title="0 runs" style="background:#003831"></span><span class="pip filled" title="1 runs" style="background:#003831"></span><span class="pip filled" title="2 runs" style="background:#003831"></span><span class="pip filled" title="3 runs" style="background:#003831"></span><span class="pip empty" title="4 runs — needs 7 avg games"></span><span class="pip filled" title="5 runs" style="background:#003831"></span><span class="pip empty" title="6 runs — needs 11 avg games"></span><span class="pip filled" title="7 runs" style="background:#003831"></span><span class="pip empty" title="8 runs — needs 22 avg games"></span><span class="pip empty" title="9 runs — needs 33 avg games"></span><span class="pip empty" title="10 runs — needs 56 avg games"></span><span class="pip filled" title="11 runs" style="background:#003831"></span><span class="pip filled" title="12 runs" style="background:#003831"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">4, 6, 8, 9, 10, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:100%;background:#003831"></div>
+            </div>
+            <span class="prob-num">17.4%</span>
+          </td>
+          <td class="avg-cell">51</td>
+        </tr>
+        <tr>
+          <td class="rank">#2</td>
+          <td class="team-name">
+            <span class="dot" style="background:#AB0003"></span>
+            <span class="full">Washington Nationals</span>
+            <span class="abbr">WSH</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">7/14</span>
+            <div class="slot-pips"><span class="pip empty" title="0 runs — needs 12 avg games"></span><span class="pip filled" title="1 runs" style="background:#AB0003"></span><span class="pip filled" title="2 runs" style="background:#AB0003"></span><span class="pip empty" title="3 runs — needs 7 avg games"></span><span class="pip empty" title="4 runs — needs 7 avg games"></span><span class="pip filled" title="5 runs" style="background:#AB0003"></span><span class="pip filled" title="6 runs" style="background:#AB0003"></span><span class="pip empty" title="7 runs — needs 15 avg games"></span><span class="pip empty" title="8 runs — needs 22 avg games"></span><span class="pip filled" title="9 runs" style="background:#AB0003"></span><span class="pip filled" title="10 runs" style="background:#AB0003"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip filled" title="13 runs" style="background:#AB0003"></span></div>
+          </td>
+          <td class="missing-cell">0, 3, 4, 7, 8, 11, 12</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:45%;background:#AB0003"></div>
+            </div>
+            <span class="prob-num">7.9%</span>
+          </td>
+          <td class="avg-cell">50</td>
+        </tr>
+        <tr>
+          <td class="rank">#3</td>
+          <td class="team-name">
+            <span class="dot" style="background:#005A9C"></span>
+            <span class="full">Los Angeles Dodgers</span>
+            <span class="abbr">LAD</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">8/14</span>
+            <div class="slot-pips"><span class="pip empty" title="0 runs — needs 12 avg games"></span><span class="pip filled" title="1 runs" style="background:#005A9C"></span><span class="pip filled" title="2 runs" style="background:#005A9C"></span><span class="pip filled" title="3 runs" style="background:#005A9C"></span><span class="pip filled" title="4 runs" style="background:#005A9C"></span><span class="pip filled" title="5 runs" style="background:#005A9C"></span><span class="pip empty" title="6 runs — needs 11 avg games"></span><span class="pip empty" title="7 runs — needs 15 avg games"></span><span class="pip filled" title="8 runs" style="background:#005A9C"></span><span class="pip empty" title="9 runs — needs 33 avg games"></span><span class="pip filled" title="10 runs" style="background:#005A9C"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip filled" title="13 runs" style="background:#005A9C"></span></div>
+          </td>
+          <td class="missing-cell">0, 6, 7, 9, 11, 12</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:40%;background:#005A9C"></div>
+            </div>
+            <span class="prob-num">6.9%</span>
+          </td>
+          <td class="avg-cell">52</td>
+        </tr>
+        <tr>
+          <td class="rank">#4</td>
+          <td class="team-name">
+            <span class="dot" style="background:#002D62"></span>
+            <span class="full">Houston Astros</span>
+            <span class="abbr">HOU</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">10/14</span>
+            <div class="slot-pips"><span class="pip filled" title="0 runs" style="background:#002D62"></span><span class="pip filled" title="1 runs" style="background:#002D62"></span><span class="pip filled" title="2 runs" style="background:#002D62"></span><span class="pip empty" title="3 runs — needs 7 avg games"></span><span class="pip filled" title="4 runs" style="background:#002D62"></span><span class="pip empty" title="5 runs — needs 8 avg games"></span><span class="pip filled" title="6 runs" style="background:#002D62"></span><span class="pip filled" title="7 runs" style="background:#002D62"></span><span class="pip filled" title="8 runs" style="background:#002D62"></span><span class="pip filled" title="9 runs" style="background:#002D62"></span><span class="pip filled" title="10 runs" style="background:#002D62"></span><span class="pip filled" title="11 runs" style="background:#002D62"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">3, 5, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:29%;background:#002D62"></div>
+            </div>
+            <span class="prob-num">5.1%</span>
+          </td>
+          <td class="avg-cell">47</td>
+        </tr>
+        <tr>
+          <td class="rank">#5</td>
+          <td class="team-name">
+            <span class="dot" style="background:#004687"></span>
+            <span class="full">Kansas City Royals</span>
+            <span class="abbr">KC</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">8/14</span>
+            <div class="slot-pips"><span class="pip filled" title="0 runs" style="background:#004687"></span><span class="pip filled" title="1 runs" style="background:#004687"></span><span class="pip filled" title="2 runs" style="background:#004687"></span><span class="pip filled" title="3 runs" style="background:#004687"></span><span class="pip filled" title="4 runs" style="background:#004687"></span><span class="pip filled" title="5 runs" style="background:#004687"></span><span class="pip empty" title="6 runs — needs 11 avg games"></span><span class="pip empty" title="7 runs — needs 15 avg games"></span><span class="pip filled" title="8 runs" style="background:#004687"></span><span class="pip empty" title="9 runs — needs 33 avg games"></span><span class="pip empty" title="10 runs — needs 56 avg games"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip filled" title="13 runs" style="background:#004687"></span></div>
+          </td>
+          <td class="missing-cell">6, 7, 9, 10, 11, 12</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:29%;background:#004687"></div>
+            </div>
+            <span class="prob-num">5.0%</span>
+          </td>
+          <td class="avg-cell">57</td>
+        </tr>
+        <tr>
+          <td class="rank">#6</td>
+          <td class="team-name">
+            <span class="dot" style="background:#002D72"></span>
+            <span class="full">New York Mets</span>
+            <span class="abbr">NYM</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">9/14</span>
+            <div class="slot-pips"><span class="pip filled" title="0 runs" style="background:#002D72"></span><span class="pip filled" title="1 runs" style="background:#002D72"></span><span class="pip filled" title="2 runs" style="background:#002D72"></span><span class="pip filled" title="3 runs" style="background:#002D72"></span><span class="pip filled" title="4 runs" style="background:#002D72"></span><span class="pip filled" title="5 runs" style="background:#002D72"></span><span class="pip empty" title="6 runs — needs 11 avg games"></span><span class="pip empty" title="7 runs — needs 15 avg games"></span><span class="pip empty" title="8 runs — needs 22 avg games"></span><span class="pip filled" title="9 runs" style="background:#002D72"></span><span class="pip filled" title="10 runs" style="background:#002D72"></span><span class="pip filled" title="11 runs" style="background:#002D72"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">6, 7, 8, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:26%;background:#002D72"></div>
+            </div>
+            <span class="prob-num">4.5%</span>
+          </td>
+          <td class="avg-cell">51</td>
+        </tr>
+        <tr>
+          <td class="rank">#7</td>
+          <td class="team-name">
+            <span class="dot" style="background:#002B5C"></span>
+            <span class="full">Minnesota Twins</span>
+            <span class="abbr">MIN</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">9/14</span>
+            <div class="slot-pips"><span class="pip empty" title="0 runs — needs 12 avg games"></span><span class="pip filled" title="1 runs" style="background:#002B5C"></span><span class="pip empty" title="2 runs — needs 8 avg games"></span><span class="pip filled" title="3 runs" style="background:#002B5C"></span><span class="pip filled" title="4 runs" style="background:#002B5C"></span><span class="pip filled" title="5 runs" style="background:#002B5C"></span><span class="pip filled" title="6 runs" style="background:#002B5C"></span><span class="pip filled" title="7 runs" style="background:#002B5C"></span><span class="pip filled" title="8 runs" style="background:#002B5C"></span><span class="pip filled" title="9 runs" style="background:#002B5C"></span><span class="pip filled" title="10 runs" style="background:#002B5C"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">0, 2, 11, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:18%;background:#002B5C"></div>
+            </div>
+            <span class="prob-num">3.1%</span>
+          </td>
+          <td class="avg-cell">54</td>
+        </tr>
+        <tr>
+          <td class="rank">#8</td>
+          <td class="team-name">
+            <span class="dot" style="background:#092C5C"></span>
+            <span class="full">Tampa Bay Rays</span>
+            <span class="abbr">TB</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">7/14</span>
+            <div class="slot-pips"><span class="pip empty" title="0 runs — needs 12 avg games"></span><span class="pip empty" title="1 runs — needs 10 avg games"></span><span class="pip filled" title="2 runs" style="background:#092C5C"></span><span class="pip filled" title="3 runs" style="background:#092C5C"></span><span class="pip filled" title="4 runs" style="background:#092C5C"></span><span class="pip filled" title="5 runs" style="background:#092C5C"></span><span class="pip filled" title="6 runs" style="background:#092C5C"></span><span class="pip filled" title="7 runs" style="background:#092C5C"></span><span class="pip empty" title="8 runs — needs 22 avg games"></span><span class="pip empty" title="9 runs — needs 33 avg games"></span><span class="pip empty" title="10 runs — needs 56 avg games"></span><span class="pip filled" title="11 runs" style="background:#092C5C"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">0, 1, 8, 9, 10, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:17%;background:#092C5C"></div>
+            </div>
+            <span class="prob-num">3.0%</span>
+          </td>
+          <td class="avg-cell">60</td>
+        </tr>
+        <tr>
+          <td class="rank">#9</td>
+          <td class="team-name">
+            <span class="dot" style="background:#0C2340"></span>
+            <span class="full">Detroit Tigers</span>
+            <span class="abbr">DET</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">9/14</span>
+            <div class="slot-pips"><span class="pip filled" title="0 runs" style="background:#0C2340"></span><span class="pip filled" title="1 runs" style="background:#0C2340"></span><span class="pip filled" title="2 runs" style="background:#0C2340"></span><span class="pip filled" title="3 runs" style="background:#0C2340"></span><span class="pip filled" title="4 runs" style="background:#0C2340"></span><span class="pip filled" title="5 runs" style="background:#0C2340"></span><span class="pip filled" title="6 runs" style="background:#0C2340"></span><span class="pip empty" title="7 runs — needs 15 avg games"></span><span class="pip filled" title="8 runs" style="background:#0C2340"></span><span class="pip empty" title="9 runs — needs 33 avg games"></span><span class="pip empty" title="10 runs — needs 56 avg games"></span><span class="pip filled" title="11 runs" style="background:#0C2340"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">7, 9, 10, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:17%;background:#0C2340"></div>
+            </div>
+            <span class="prob-num">2.9%</span>
+          </td>
+          <td class="avg-cell">55</td>
+        </tr>
+        <tr>
+          <td class="rank">#10</td>
+          <td class="team-name">
+            <span class="dot" style="background:#0E3386"></span>
+            <span class="full">Chicago Cubs</span>
+            <span class="abbr">CHC</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">9/14</span>
+            <div class="slot-pips"><span class="pip filled" title="0 runs" style="background:#0E3386"></span><span class="pip filled" title="1 runs" style="background:#0E3386"></span><span class="pip empty" title="2 runs — needs 8 avg games"></span><span class="pip filled" title="3 runs" style="background:#0E3386"></span><span class="pip filled" title="4 runs" style="background:#0E3386"></span><span class="pip filled" title="5 runs" style="background:#0E3386"></span><span class="pip filled" title="6 runs" style="background:#0E3386"></span><span class="pip filled" title="7 runs" style="background:#0E3386"></span><span class="pip empty" title="8 runs — needs 22 avg games"></span><span class="pip filled" title="9 runs" style="background:#0E3386"></span><span class="pip filled" title="10 runs" style="background:#0E3386"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">2, 8, 11, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:16%;background:#0E3386"></div>
+            </div>
+            <span class="prob-num">2.8%</span>
+          </td>
+          <td class="avg-cell">56</td>
+        </tr>
+        <tr>
+          <td class="rank">#11</td>
+          <td class="team-name">
+            <span class="dot" style="background:#00A3E0"></span>
+            <span class="full">Miami Marlins</span>
+            <span class="abbr">MIA</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">8/14</span>
+            <div class="slot-pips"><span class="pip filled" title="0 runs" style="background:#00A3E0"></span><span class="pip empty" title="1 runs — needs 10 avg games"></span><span class="pip filled" title="2 runs" style="background:#00A3E0"></span><span class="pip filled" title="3 runs" style="background:#00A3E0"></span><span class="pip filled" title="4 runs" style="background:#00A3E0"></span><span class="pip empty" title="5 runs — needs 8 avg games"></span><span class="pip empty" title="6 runs — needs 11 avg games"></span><span class="pip filled" title="7 runs" style="background:#00A3E0"></span><span class="pip filled" title="8 runs" style="background:#00A3E0"></span><span class="pip filled" title="9 runs" style="background:#00A3E0"></span><span class="pip filled" title="10 runs" style="background:#00A3E0"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">1, 5, 6, 11, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:16%;background:#00A3E0"></div>
+            </div>
+            <span class="prob-num">2.8%</span>
+          </td>
+          <td class="avg-cell">55</td>
+        </tr>
+        <tr>
+          <td class="rank">#12</td>
+          <td class="team-name">
+            <span class="dot" style="background:#E81828"></span>
+            <span class="full">Philadelphia Phillies</span>
+            <span class="abbr">PHI</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">8/14</span>
+            <div class="slot-pips"><span class="pip filled" title="0 runs" style="background:#E81828"></span><span class="pip filled" title="1 runs" style="background:#E81828"></span><span class="pip filled" title="2 runs" style="background:#E81828"></span><span class="pip filled" title="3 runs" style="background:#E81828"></span><span class="pip filled" title="4 runs" style="background:#E81828"></span><span class="pip filled" title="5 runs" style="background:#E81828"></span><span class="pip filled" title="6 runs" style="background:#E81828"></span><span class="pip empty" title="7 runs — needs 15 avg games"></span><span class="pip empty" title="8 runs — needs 22 avg games"></span><span class="pip empty" title="9 runs — needs 33 avg games"></span><span class="pip filled" title="10 runs" style="background:#E81828"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">7, 8, 9, 11, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:14%;background:#E81828"></div>
+            </div>
+            <span class="prob-num">2.5%</span>
+          </td>
+          <td class="avg-cell">58</td>
+        </tr>
+        <tr>
+          <td class="rank">#13</td>
+          <td class="team-name">
+            <span class="dot" style="background:#E31937"></span>
+            <span class="full">Cleveland Guardians</span>
+            <span class="abbr">CLE</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">6/14</span>
+            <div class="slot-pips"><span class="pip filled" title="0 runs" style="background:#E31937"></span><span class="pip filled" title="1 runs" style="background:#E31937"></span><span class="pip filled" title="2 runs" style="background:#E31937"></span><span class="pip empty" title="3 runs — needs 7 avg games"></span><span class="pip filled" title="4 runs" style="background:#E31937"></span><span class="pip empty" title="5 runs — needs 8 avg games"></span><span class="pip filled" title="6 runs" style="background:#E31937"></span><span class="pip empty" title="7 runs — needs 15 avg games"></span><span class="pip empty" title="8 runs — needs 22 avg games"></span><span class="pip empty" title="9 runs — needs 33 avg games"></span><span class="pip filled" title="10 runs" style="background:#E31937"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">3, 5, 7, 8, 9, 11, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:14%;background:#E31937"></div>
+            </div>
+            <span class="prob-num">2.4%</span>
+          </td>
+          <td class="avg-cell">61</td>
+        </tr>
+        <tr>
+          <td class="rank">#14</td>
+          <td class="team-name">
+            <span class="dot" style="background:#333366"></span>
+            <span class="full">Colorado Rockies</span>
+            <span class="abbr">COL</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">6/14</span>
+            <div class="slot-pips"><span class="pip empty" title="0 runs — needs 12 avg games"></span><span class="pip filled" title="1 runs" style="background:#333366"></span><span class="pip filled" title="2 runs" style="background:#333366"></span><span class="pip filled" title="3 runs" style="background:#333366"></span><span class="pip filled" title="4 runs" style="background:#333366"></span><span class="pip filled" title="5 runs" style="background:#333366"></span><span class="pip empty" title="6 runs — needs 11 avg games"></span><span class="pip empty" title="7 runs — needs 15 avg games"></span><span class="pip empty" title="8 runs — needs 22 avg games"></span><span class="pip filled" title="9 runs" style="background:#333366"></span><span class="pip empty" title="10 runs — needs 56 avg games"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">0, 6, 7, 8, 10, 11, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:13%;background:#333366"></div>
+            </div>
+            <span class="prob-num">2.3%</span>
+          </td>
+          <td class="avg-cell">62</td>
+        </tr>
+        <tr>
+          <td class="rank">#15</td>
+          <td class="team-name">
+            <span class="dot" style="background:#12284B"></span>
+            <span class="full">Milwaukee Brewers</span>
+            <span class="abbr">MIL</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">6/14</span>
+            <div class="slot-pips"><span class="pip filled" title="0 runs" style="background:#12284B"></span><span class="pip empty" title="1 runs — needs 10 avg games"></span><span class="pip filled" title="2 runs" style="background:#12284B"></span><span class="pip empty" title="3 runs — needs 7 avg games"></span><span class="pip empty" title="4 runs — needs 7 avg games"></span><span class="pip filled" title="5 runs" style="background:#12284B"></span><span class="pip filled" title="6 runs" style="background:#12284B"></span><span class="pip empty" title="7 runs — needs 15 avg games"></span><span class="pip filled" title="8 runs" style="background:#12284B"></span><span class="pip filled" title="9 runs" style="background:#12284B"></span><span class="pip empty" title="10 runs — needs 56 avg games"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">1, 3, 4, 7, 10, 11, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:13%;background:#12284B"></div>
+            </div>
+            <span class="prob-num">2.3%</span>
+          </td>
+          <td class="avg-cell">61</td>
+        </tr>
+        <tr>
+          <td class="rank">#16</td>
+          <td class="team-name">
+            <span class="dot" style="background:#27251F"></span>
+            <span class="full">Chicago White Sox</span>
+            <span class="abbr">CWS</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">8/14</span>
+            <div class="slot-pips"><span class="pip filled" title="0 runs" style="background:#27251F"></span><span class="pip filled" title="1 runs" style="background:#27251F"></span><span class="pip filled" title="2 runs" style="background:#27251F"></span><span class="pip filled" title="3 runs" style="background:#27251F"></span><span class="pip empty" title="4 runs — needs 7 avg games"></span><span class="pip filled" title="5 runs" style="background:#27251F"></span><span class="pip filled" title="6 runs" style="background:#27251F"></span><span class="pip filled" title="7 runs" style="background:#27251F"></span><span class="pip empty" title="8 runs — needs 22 avg games"></span><span class="pip filled" title="9 runs" style="background:#27251F"></span><span class="pip empty" title="10 runs — needs 56 avg games"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">4, 8, 10, 11, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:13%;background:#27251F"></div>
+            </div>
+            <span class="prob-num">2.3%</span>
+          </td>
+          <td class="avg-cell">62</td>
+        </tr>
+        <tr>
+          <td class="rank">#17</td>
+          <td class="team-name">
+            <span class="dot" style="background:#C41E3A"></span>
+            <span class="full">St. Louis Cardinals</span>
+            <span class="abbr">STL</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">7/14</span>
+            <div class="slot-pips"><span class="pip filled" title="0 runs" style="background:#C41E3A"></span><span class="pip empty" title="1 runs — needs 10 avg games"></span><span class="pip filled" title="2 runs" style="background:#C41E3A"></span><span class="pip filled" title="3 runs" style="background:#C41E3A"></span><span class="pip empty" title="4 runs — needs 7 avg games"></span><span class="pip filled" title="5 runs" style="background:#C41E3A"></span><span class="pip filled" title="6 runs" style="background:#C41E3A"></span><span class="pip filled" title="7 runs" style="background:#C41E3A"></span><span class="pip empty" title="8 runs — needs 22 avg games"></span><span class="pip filled" title="9 runs" style="background:#C41E3A"></span><span class="pip empty" title="10 runs — needs 56 avg games"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">1, 4, 8, 10, 11, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:12%;background:#C41E3A"></div>
+            </div>
+            <span class="prob-num">2.1%</span>
+          </td>
+          <td class="avg-cell">61</td>
+        </tr>
+        <tr>
+          <td class="rank">#18</td>
+          <td class="team-name">
+            <span class="dot" style="background:#003087"></span>
+            <span class="full">New York Yankees</span>
+            <span class="abbr">NYY</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">9/14</span>
+            <div class="slot-pips"><span class="pip filled" title="0 runs" style="background:#003087"></span><span class="pip filled" title="1 runs" style="background:#003087"></span><span class="pip filled" title="2 runs" style="background:#003087"></span><span class="pip filled" title="3 runs" style="background:#003087"></span><span class="pip empty" title="4 runs — needs 7 avg games"></span><span class="pip filled" title="5 runs" style="background:#003087"></span><span class="pip filled" title="6 runs" style="background:#003087"></span><span class="pip filled" title="7 runs" style="background:#003087"></span><span class="pip filled" title="8 runs" style="background:#003087"></span><span class="pip filled" title="9 runs" style="background:#003087"></span><span class="pip empty" title="10 runs — needs 56 avg games"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">4, 10, 11, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:12%;background:#003087"></div>
+            </div>
+            <span class="prob-num">2.1%</span>
+          </td>
+          <td class="avg-cell">61</td>
+        </tr>
+        <tr>
+          <td class="rank">#19</td>
+          <td class="team-name">
+            <span class="dot" style="background:#0C2C56"></span>
+            <span class="full">Seattle Mariners</span>
+            <span class="abbr">SEA</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">8/14</span>
+            <div class="slot-pips"><span class="pip filled" title="0 runs" style="background:#0C2C56"></span><span class="pip filled" title="1 runs" style="background:#0C2C56"></span><span class="pip filled" title="2 runs" style="background:#0C2C56"></span><span class="pip filled" title="3 runs" style="background:#0C2C56"></span><span class="pip filled" title="4 runs" style="background:#0C2C56"></span><span class="pip filled" title="5 runs" style="background:#0C2C56"></span><span class="pip empty" title="6 runs — needs 11 avg games"></span><span class="pip filled" title="7 runs" style="background:#0C2C56"></span><span class="pip filled" title="8 runs" style="background:#0C2C56"></span><span class="pip empty" title="9 runs — needs 33 avg games"></span><span class="pip empty" title="10 runs — needs 56 avg games"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">6, 9, 10, 11, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:12%;background:#0C2C56"></div>
+            </div>
+            <span class="prob-num">2.1%</span>
+          </td>
+          <td class="avg-cell">65</td>
+        </tr>
+        <tr>
+          <td class="rank">#20</td>
+          <td class="team-name">
+            <span class="dot" style="background:#2F241D"></span>
+            <span class="full">San Diego Padres</span>
+            <span class="abbr">SD</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">6/14</span>
+            <div class="slot-pips"><span class="pip empty" title="0 runs — needs 12 avg games"></span><span class="pip filled" title="1 runs" style="background:#2F241D"></span><span class="pip filled" title="2 runs" style="background:#2F241D"></span><span class="pip filled" title="3 runs" style="background:#2F241D"></span><span class="pip empty" title="4 runs — needs 7 avg games"></span><span class="pip filled" title="5 runs" style="background:#2F241D"></span><span class="pip empty" title="6 runs — needs 11 avg games"></span><span class="pip filled" title="7 runs" style="background:#2F241D"></span><span class="pip filled" title="8 runs" style="background:#2F241D"></span><span class="pip empty" title="9 runs — needs 33 avg games"></span><span class="pip empty" title="10 runs — needs 56 avg games"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">0, 4, 6, 9, 10, 11, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:12%;background:#2F241D"></div>
+            </div>
+            <span class="prob-num">2.0%</span>
+          </td>
+          <td class="avg-cell">62</td>
+        </tr>
+        <tr>
+          <td class="rank">#21</td>
+          <td class="team-name">
+            <span class="dot" style="background:#CE1141"></span>
+            <span class="full">Atlanta Braves</span>
+            <span class="abbr">ATL</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">7/14</span>
+            <div class="slot-pips"><span class="pip empty" title="0 runs — needs 12 avg games"></span><span class="pip filled" title="1 runs" style="background:#CE1141"></span><span class="pip filled" title="2 runs" style="background:#CE1141"></span><span class="pip empty" title="3 runs — needs 7 avg games"></span><span class="pip filled" title="4 runs" style="background:#CE1141"></span><span class="pip filled" title="5 runs" style="background:#CE1141"></span><span class="pip filled" title="6 runs" style="background:#CE1141"></span><span class="pip filled" title="7 runs" style="background:#CE1141"></span><span class="pip filled" title="8 runs" style="background:#CE1141"></span><span class="pip empty" title="9 runs — needs 33 avg games"></span><span class="pip empty" title="10 runs — needs 56 avg games"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">0, 3, 9, 10, 11, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:11%;background:#CE1141"></div>
+            </div>
+            <span class="prob-num">2.0%</span>
+          </td>
+          <td class="avg-cell">63</td>
+        </tr>
+        <tr>
+          <td class="rank">#22</td>
+          <td class="team-name">
+            <span class="dot" style="background:#BA0021"></span>
+            <span class="full">Los Angeles Angels</span>
+            <span class="abbr">LAA</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">7/14</span>
+            <div class="slot-pips"><span class="pip empty" title="0 runs — needs 12 avg games"></span><span class="pip filled" title="1 runs" style="background:#BA0021"></span><span class="pip filled" title="2 runs" style="background:#BA0021"></span><span class="pip filled" title="3 runs" style="background:#BA0021"></span><span class="pip empty" title="4 runs — needs 7 avg games"></span><span class="pip empty" title="5 runs — needs 8 avg games"></span><span class="pip filled" title="6 runs" style="background:#BA0021"></span><span class="pip filled" title="7 runs" style="background:#BA0021"></span><span class="pip filled" title="8 runs" style="background:#BA0021"></span><span class="pip filled" title="9 runs" style="background:#BA0021"></span><span class="pip empty" title="10 runs — needs 56 avg games"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">0, 4, 5, 10, 11, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:11%;background:#BA0021"></div>
+            </div>
+            <span class="prob-num">2.0%</span>
+          </td>
+          <td class="avg-cell">62</td>
+        </tr>
+        <tr>
+          <td class="rank">#23</td>
+          <td class="team-name">
+            <span class="dot" style="background:#FD5A1E"></span>
+            <span class="full">San Francisco Giants</span>
+            <span class="abbr">SF</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">9/14</span>
+            <div class="slot-pips"><span class="pip filled" title="0 runs" style="background:#FD5A1E"></span><span class="pip filled" title="1 runs" style="background:#FD5A1E"></span><span class="pip filled" title="2 runs" style="background:#FD5A1E"></span><span class="pip filled" title="3 runs" style="background:#FD5A1E"></span><span class="pip filled" title="4 runs" style="background:#FD5A1E"></span><span class="pip filled" title="5 runs" style="background:#FD5A1E"></span><span class="pip filled" title="6 runs" style="background:#FD5A1E"></span><span class="pip filled" title="7 runs" style="background:#FD5A1E"></span><span class="pip empty" title="8 runs — needs 22 avg games"></span><span class="pip filled" title="9 runs" style="background:#FD5A1E"></span><span class="pip empty" title="10 runs — needs 56 avg games"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">8, 10, 11, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:11%;background:#FD5A1E"></div>
+            </div>
+            <span class="prob-num">1.9%</span>
+          </td>
+          <td class="avg-cell">63</td>
+        </tr>
+        <tr>
+          <td class="rank">#24</td>
+          <td class="team-name">
+            <span class="dot" style="background:#A71930"></span>
+            <span class="full">Arizona Diamondbacks</span>
+            <span class="abbr">ARI</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">8/14</span>
+            <div class="slot-pips"><span class="pip filled" title="0 runs" style="background:#A71930"></span><span class="pip filled" title="1 runs" style="background:#A71930"></span><span class="pip filled" title="2 runs" style="background:#A71930"></span><span class="pip filled" title="3 runs" style="background:#A71930"></span><span class="pip filled" title="4 runs" style="background:#A71930"></span><span class="pip empty" title="5 runs — needs 8 avg games"></span><span class="pip filled" title="6 runs" style="background:#A71930"></span><span class="pip filled" title="7 runs" style="background:#A71930"></span><span class="pip empty" title="8 runs — needs 22 avg games"></span><span class="pip filled" title="9 runs" style="background:#A71930"></span><span class="pip empty" title="10 runs — needs 56 avg games"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">5, 8, 10, 11, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:11%;background:#A71930"></div>
+            </div>
+            <span class="prob-num">1.9%</span>
+          </td>
+          <td class="avg-cell">64</td>
+        </tr>
+        <tr>
+          <td class="rank">#25</td>
+          <td class="team-name">
+            <span class="dot" style="background:#BD3039"></span>
+            <span class="full">Boston Red Sox</span>
+            <span class="abbr">BOS</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">6/14</span>
+            <div class="slot-pips"><span class="pip empty" title="0 runs — needs 12 avg games"></span><span class="pip filled" title="1 runs" style="background:#BD3039"></span><span class="pip filled" title="2 runs" style="background:#BD3039"></span><span class="pip filled" title="3 runs" style="background:#BD3039"></span><span class="pip filled" title="4 runs" style="background:#BD3039"></span><span class="pip filled" title="5 runs" style="background:#BD3039"></span><span class="pip filled" title="6 runs" style="background:#BD3039"></span><span class="pip empty" title="7 runs — needs 15 avg games"></span><span class="pip empty" title="8 runs — needs 22 avg games"></span><span class="pip empty" title="9 runs — needs 33 avg games"></span><span class="pip empty" title="10 runs — needs 56 avg games"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">0, 7, 8, 9, 10, 11, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:11%;background:#BD3039"></div>
+            </div>
+            <span class="prob-num">1.8%</span>
+          </td>
+          <td class="avg-cell">65</td>
+        </tr>
+        <tr>
+          <td class="rank">#26</td>
+          <td class="team-name">
+            <span class="dot" style="background:#DF4601"></span>
+            <span class="full">Baltimore Orioles</span>
+            <span class="abbr">BAL</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">5/14</span>
+            <div class="slot-pips"><span class="pip empty" title="0 runs — needs 12 avg games"></span><span class="pip filled" title="1 runs" style="background:#DF4601"></span><span class="pip filled" title="2 runs" style="background:#DF4601"></span><span class="pip empty" title="3 runs — needs 7 avg games"></span><span class="pip filled" title="4 runs" style="background:#DF4601"></span><span class="pip filled" title="5 runs" style="background:#DF4601"></span><span class="pip empty" title="6 runs — needs 11 avg games"></span><span class="pip empty" title="7 runs — needs 15 avg games"></span><span class="pip filled" title="8 runs" style="background:#DF4601"></span><span class="pip empty" title="9 runs — needs 33 avg games"></span><span class="pip empty" title="10 runs — needs 56 avg games"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">0, 3, 6, 7, 9, 10, 11, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:11%;background:#DF4601"></div>
+            </div>
+            <span class="prob-num">1.8%</span>
+          </td>
+          <td class="avg-cell">67</td>
+        </tr>
+        <tr>
+          <td class="rank">#27</td>
+          <td class="team-name">
+            <span class="dot" style="background:#27251F"></span>
+            <span class="full">Pittsburgh Pirates</span>
+            <span class="abbr">PIT</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">7/14</span>
+            <div class="slot-pips"><span class="pip filled" title="0 runs" style="background:#27251F"></span><span class="pip empty" title="1 runs — needs 10 avg games"></span><span class="pip filled" title="2 runs" style="background:#27251F"></span><span class="pip filled" title="3 runs" style="background:#27251F"></span><span class="pip filled" title="4 runs" style="background:#27251F"></span><span class="pip filled" title="5 runs" style="background:#27251F"></span><span class="pip empty" title="6 runs — needs 11 avg games"></span><span class="pip filled" title="7 runs" style="background:#27251F"></span><span class="pip filled" title="8 runs" style="background:#27251F"></span><span class="pip empty" title="9 runs — needs 33 avg games"></span><span class="pip empty" title="10 runs — needs 56 avg games"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">1, 6, 9, 10, 11, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:11%;background:#27251F"></div>
+            </div>
+            <span class="prob-num">1.8%</span>
+          </td>
+          <td class="avg-cell">64</td>
+        </tr>
+        <tr>
+          <td class="rank">#28</td>
+          <td class="team-name">
+            <span class="dot" style="background:#C6011F"></span>
+            <span class="full">Cincinnati Reds</span>
+            <span class="abbr">CIN</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">7/14</span>
+            <div class="slot-pips"><span class="pip filled" title="0 runs" style="background:#C6011F"></span><span class="pip filled" title="1 runs" style="background:#C6011F"></span><span class="pip filled" title="2 runs" style="background:#C6011F"></span><span class="pip filled" title="3 runs" style="background:#C6011F"></span><span class="pip filled" title="4 runs" style="background:#C6011F"></span><span class="pip filled" title="5 runs" style="background:#C6011F"></span><span class="pip filled" title="6 runs" style="background:#C6011F"></span><span class="pip empty" title="7 runs — needs 15 avg games"></span><span class="pip empty" title="8 runs — needs 22 avg games"></span><span class="pip empty" title="9 runs — needs 33 avg games"></span><span class="pip empty" title="10 runs — needs 56 avg games"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">7, 8, 9, 10, 11, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:10%;background:#C6011F"></div>
+            </div>
+            <span class="prob-num">1.7%</span>
+          </td>
+          <td class="avg-cell">65</td>
+        </tr>
+        <tr>
+          <td class="rank">#29</td>
+          <td class="team-name">
+            <span class="dot" style="background:#134A8E"></span>
+            <span class="full">Toronto Blue Jays</span>
+            <span class="abbr">TOR</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">7/14</span>
+            <div class="slot-pips"><span class="pip filled" title="0 runs" style="background:#134A8E"></span><span class="pip filled" title="1 runs" style="background:#134A8E"></span><span class="pip filled" title="2 runs" style="background:#134A8E"></span><span class="pip filled" title="3 runs" style="background:#134A8E"></span><span class="pip filled" title="4 runs" style="background:#134A8E"></span><span class="pip filled" title="5 runs" style="background:#134A8E"></span><span class="pip empty" title="6 runs — needs 11 avg games"></span><span class="pip empty" title="7 runs — needs 15 avg games"></span><span class="pip filled" title="8 runs" style="background:#134A8E"></span><span class="pip empty" title="9 runs — needs 33 avg games"></span><span class="pip empty" title="10 runs — needs 56 avg games"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">6, 7, 9, 10, 11, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:10%;background:#134A8E"></div>
+            </div>
+            <span class="prob-num">1.7%</span>
+          </td>
+          <td class="avg-cell">62</td>
+        </tr>
+        <tr>
+          <td class="rank">#30</td>
+          <td class="team-name">
+            <span class="dot" style="background:#003278"></span>
+            <span class="full">Texas Rangers</span>
+            <span class="abbr">TEX</span>
+          </td>
+          <td class="slots-cell">
+            <span class="slots-num">6/14</span>
+            <div class="slot-pips"><span class="pip filled" title="0 runs" style="background:#003278"></span><span class="pip filled" title="1 runs" style="background:#003278"></span><span class="pip filled" title="2 runs" style="background:#003278"></span><span class="pip filled" title="3 runs" style="background:#003278"></span><span class="pip empty" title="4 runs — needs 7 avg games"></span><span class="pip filled" title="5 runs" style="background:#003278"></span><span class="pip empty" title="6 runs — needs 11 avg games"></span><span class="pip empty" title="7 runs — needs 15 avg games"></span><span class="pip filled" title="8 runs" style="background:#003278"></span><span class="pip empty" title="9 runs — needs 33 avg games"></span><span class="pip empty" title="10 runs — needs 56 avg games"></span><span class="pip empty" title="11 runs — needs 83 avg games"></span><span class="pip empty" title="12 runs — needs 143 avg games"></span><span class="pip empty" title="13 runs — needs 200 avg games"></span></div>
+          </td>
+          <td class="missing-cell">4, 6, 7, 9, 10, 11, 12, 13</td>
+          <td class="prob-cell">
+            <div class="prob-bar-wrap">
+              <div class="prob-bar" style="width:10%;background:#003278"></div>
+            </div>
+            <span class="prob-num">1.7%</span>
+          </td>
+          <td class="avg-cell">61</td>
+        </tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- GRID -->
+<div class="section">
+  <h2>Progress Grid
+    <span style="font-size:0.7rem;font-weight:400;margin-left:8px">
+      ✓ = scored &nbsp;·&nbsp; ✓★ = first in league &nbsp;·&nbsp;
+      <span style="color:#22c55e">green cols</span> = common &nbsp;·&nbsp;
+      <span style="color:#f59e0b">amber</span> = moderate &nbsp;·&nbsp;
+      <span style="color:#f97316">orange</span> = rare &nbsp;·&nbsp;
+      <span style="color:#ef4444">red</span> = very rare
+    </span>
+  </h2>
+  <div class="card grid-wrap">
+    <table class="grid-table">
+      <thead>
+        <tr>
+          <th style="text-align:left;padding-left:10px">Team</th>
+          <th>Done</th>
+          <th class="slot-header difficulty-moderate" title="moderate — ~1 in 12 games">0</th><th class="slot-header difficulty-common" title="common — ~1 in 10 games">1</th><th class="slot-header difficulty-common" title="common — ~1 in 8 games">2</th><th class="slot-header difficulty-common" title="common — ~1 in 7 games">3</th><th class="slot-header difficulty-common" title="common — ~1 in 7 games">4</th><th class="slot-header difficulty-common" title="common — ~1 in 8 games">5</th><th class="slot-header difficulty-moderate" title="moderate — ~1 in 11 games">6</th><th class="slot-header difficulty-moderate" title="moderate — ~1 in 15 games">7</th><th class="slot-header difficulty-moderate" title="moderate — ~1 in 22 games">8</th><th class="slot-header difficulty-rare" title="rare — ~1 in 33 games">9</th><th class="slot-header difficulty-rare" title="rare — ~1 in 56 games">10</th><th class="slot-header difficulty-rare" title="rare — ~1 in 83 games">11</th><th class="slot-header difficulty-very rare" title="very rare — ~1 in 143 games">12</th><th class="slot-header difficulty-very rare" title="very rare — ~1 in 200 games">13</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#003831"></span>
+            <span class="full">Athletics</span>
+            <span class="abbr">ATH</span>
+          </td>
+          <td class="grid-total">8/14</td>
+          <td class="grid-cell claimed" style="background:#00383122;border-color:#00383155" title="Scored 0 runs vs New York Yankees on 2026-03-25"><span class="check" style="color:#003831">✓</span></td><td class="grid-cell claimed" style="background:#00383122;border-color:#00383155" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#003831">✓</span></td><td class="grid-cell claimed" style="background:#00383122;border-color:#00383155" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#003831">✓</span></td><td class="grid-cell claimed" style="background:#00383122;border-color:#00383155" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#003831">✓</span></td><td class="grid-cell empty difficulty-common" title="4 runs — common (~1 in 7 games)"></td><td class="grid-cell claimed" style="background:#00383122;border-color:#00383155" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#003831">✓</span></td><td class="grid-cell empty difficulty-moderate" title="6 runs — moderate (~1 in 11 games)"></td><td class="grid-cell claimed" style="background:#00383122;border-color:#00383155" title="Scored 7 runs vs San Francisco Giants on 2026-03-25"><span class="check" style="color:#003831">✓</span></td><td class="grid-cell empty difficulty-moderate" title="8 runs — moderate (~1 in 22 games)"></td><td class="grid-cell empty difficulty-rare" title="9 runs — rare (~1 in 33 games)"></td><td class="grid-cell empty difficulty-rare" title="10 runs — rare (~1 in 56 games)"></td><td class="grid-cell claimed" style="background:#00383122;border-color:#00383155" title="Scored 11 runs vs Pittsburgh Pirates on 2026-03-26"><span class="check" style="color:#003831">✓</span></td><td class="grid-cell claimed first" style="background:#00383122;border-color:#00383155" title="Scored 12 runs vs Houston Astros on 2026-04-05"><span class="check" style="color:#003831">✓</span></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#AB0003"></span>
+            <span class="full">Washington Nationals</span>
+            <span class="abbr">WSH</span>
+          </td>
+          <td class="grid-total">7/14</td>
+          <td class="grid-cell empty difficulty-moderate" title="0 runs — moderate (~1 in 12 games)"></td><td class="grid-cell claimed" style="background:#AB000322;border-color:#AB000355" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#AB0003">✓</span></td><td class="grid-cell claimed" style="background:#AB000322;border-color:#AB000355" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#AB0003">✓</span></td><td class="grid-cell empty difficulty-common" title="3 runs — common (~1 in 7 games)"></td><td class="grid-cell empty difficulty-common" title="4 runs — common (~1 in 7 games)"></td><td class="grid-cell claimed" style="background:#AB000322;border-color:#AB000355" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#AB0003">✓</span></td><td class="grid-cell claimed" style="background:#AB000322;border-color:#AB000355" title="Scored 6 runs vs Seattle Mariners on 2026-03-26"><span class="check" style="color:#AB0003">✓</span></td><td class="grid-cell empty difficulty-moderate" title="7 runs — moderate (~1 in 15 games)"></td><td class="grid-cell empty difficulty-moderate" title="8 runs — moderate (~1 in 22 games)"></td><td class="grid-cell claimed" style="background:#AB000322;border-color:#AB000355" title="Scored 9 runs vs Tampa Bay Rays on 2026-03-26"><span class="check" style="color:#AB0003">✓</span></td><td class="grid-cell claimed first" style="background:#AB000322;border-color:#AB000355" title="Scored 10 runs vs Chicago Cubs on 2026-03-26"><span class="check" style="color:#AB0003">✓</span></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell claimed first" style="background:#AB000322;border-color:#AB000355" title="Scored 13 runs vs Philadelphia Phillies on 2026-03-30"><span class="check" style="color:#AB0003">✓</span></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#005A9C"></span>
+            <span class="full">Los Angeles Dodgers</span>
+            <span class="abbr">LAD</span>
+          </td>
+          <td class="grid-total">8/14</td>
+          <td class="grid-cell empty difficulty-moderate" title="0 runs — moderate (~1 in 12 games)"></td><td class="grid-cell claimed" style="background:#005A9C22;border-color:#005A9C55" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#005A9C">✓</span></td><td class="grid-cell claimed" style="background:#005A9C22;border-color:#005A9C55" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#005A9C">✓</span></td><td class="grid-cell claimed" style="background:#005A9C22;border-color:#005A9C55" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#005A9C">✓</span></td><td class="grid-cell claimed" style="background:#005A9C22;border-color:#005A9C55" title="Scored 4 runs vs Washington Nationals on 2026-03-26"><span class="check" style="color:#005A9C">✓</span></td><td class="grid-cell claimed" style="background:#005A9C22;border-color:#005A9C55" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#005A9C">✓</span></td><td class="grid-cell empty difficulty-moderate" title="6 runs — moderate (~1 in 11 games)"></td><td class="grid-cell empty difficulty-moderate" title="7 runs — moderate (~1 in 15 games)"></td><td class="grid-cell claimed" style="background:#005A9C22;border-color:#005A9C55" title="Scored 8 runs vs San Diego Padres on 2026-03-26"><span class="check" style="color:#005A9C">✓</span></td><td class="grid-cell empty difficulty-rare" title="9 runs — rare (~1 in 33 games)"></td><td class="grid-cell claimed" style="background:#005A9C22;border-color:#005A9C55" title="Scored 10 runs vs Chicago Cubs on 2026-03-26"><span class="check" style="color:#005A9C">✓</span></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell claimed" style="background:#005A9C22;border-color:#005A9C55" title="Scored 13 runs vs Philadelphia Phillies on 2026-03-30"><span class="check" style="color:#005A9C">✓</span></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#002D62"></span>
+            <span class="full">Houston Astros</span>
+            <span class="abbr">HOU</span>
+          </td>
+          <td class="grid-total">10/14</td>
+          <td class="grid-cell claimed" style="background:#002D6222;border-color:#002D6255" title="Scored 0 runs vs New York Yankees on 2026-03-25"><span class="check" style="color:#002D62">✓</span></td><td class="grid-cell claimed" style="background:#002D6222;border-color:#002D6255" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#002D62">✓</span></td><td class="grid-cell claimed" style="background:#002D6222;border-color:#002D6255" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#002D62">✓</span></td><td class="grid-cell empty difficulty-common" title="3 runs — common (~1 in 7 games)"></td><td class="grid-cell claimed" style="background:#002D6222;border-color:#002D6255" title="Scored 4 runs vs Washington Nationals on 2026-03-26"><span class="check" style="color:#002D62">✓</span></td><td class="grid-cell empty difficulty-common" title="5 runs — common (~1 in 8 games)"></td><td class="grid-cell claimed" style="background:#002D6222;border-color:#002D6255" title="Scored 6 runs vs Seattle Mariners on 2026-03-26"><span class="check" style="color:#002D62">✓</span></td><td class="grid-cell claimed" style="background:#002D6222;border-color:#002D6255" title="Scored 7 runs vs San Francisco Giants on 2026-03-25"><span class="check" style="color:#002D62">✓</span></td><td class="grid-cell claimed" style="background:#002D6222;border-color:#002D6255" title="Scored 8 runs vs San Diego Padres on 2026-03-26"><span class="check" style="color:#002D62">✓</span></td><td class="grid-cell claimed" style="background:#002D6222;border-color:#002D6255" title="Scored 9 runs vs Tampa Bay Rays on 2026-03-26"><span class="check" style="color:#002D62">✓</span></td><td class="grid-cell claimed" style="background:#002D6222;border-color:#002D6255" title="Scored 10 runs vs Chicago Cubs on 2026-03-26"><span class="check" style="color:#002D62">✓</span></td><td class="grid-cell claimed" style="background:#002D6222;border-color:#002D6255" title="Scored 11 runs vs Pittsburgh Pirates on 2026-03-26"><span class="check" style="color:#002D62">✓</span></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#004687"></span>
+            <span class="full">Kansas City Royals</span>
+            <span class="abbr">KC</span>
+          </td>
+          <td class="grid-total">8/14</td>
+          <td class="grid-cell claimed" style="background:#00468722;border-color:#00468755" title="Scored 0 runs vs New York Yankees on 2026-03-25"><span class="check" style="color:#004687">✓</span></td><td class="grid-cell claimed" style="background:#00468722;border-color:#00468755" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#004687">✓</span></td><td class="grid-cell claimed" style="background:#00468722;border-color:#00468755" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#004687">✓</span></td><td class="grid-cell claimed" style="background:#00468722;border-color:#00468755" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#004687">✓</span></td><td class="grid-cell claimed" style="background:#00468722;border-color:#00468755" title="Scored 4 runs vs Washington Nationals on 2026-03-26"><span class="check" style="color:#004687">✓</span></td><td class="grid-cell claimed" style="background:#00468722;border-color:#00468755" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#004687">✓</span></td><td class="grid-cell empty difficulty-moderate" title="6 runs — moderate (~1 in 11 games)"></td><td class="grid-cell empty difficulty-moderate" title="7 runs — moderate (~1 in 15 games)"></td><td class="grid-cell claimed" style="background:#00468722;border-color:#00468755" title="Scored 8 runs vs San Diego Padres on 2026-03-26"><span class="check" style="color:#004687">✓</span></td><td class="grid-cell empty difficulty-rare" title="9 runs — rare (~1 in 33 games)"></td><td class="grid-cell empty difficulty-rare" title="10 runs — rare (~1 in 56 games)"></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell claimed" style="background:#00468722;border-color:#00468755" title="Scored 13 runs vs Philadelphia Phillies on 2026-03-30"><span class="check" style="color:#004687">✓</span></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#002D72"></span>
+            <span class="full">New York Mets</span>
+            <span class="abbr">NYM</span>
+          </td>
+          <td class="grid-total">9/14</td>
+          <td class="grid-cell claimed" style="background:#002D7222;border-color:#002D7255" title="Scored 0 runs vs New York Yankees on 2026-03-25"><span class="check" style="color:#002D72">✓</span></td><td class="grid-cell claimed" style="background:#002D7222;border-color:#002D7255" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#002D72">✓</span></td><td class="grid-cell claimed" style="background:#002D7222;border-color:#002D7255" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#002D72">✓</span></td><td class="grid-cell claimed" style="background:#002D7222;border-color:#002D7255" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#002D72">✓</span></td><td class="grid-cell claimed" style="background:#002D7222;border-color:#002D7255" title="Scored 4 runs vs Washington Nationals on 2026-03-26"><span class="check" style="color:#002D72">✓</span></td><td class="grid-cell claimed" style="background:#002D7222;border-color:#002D7255" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#002D72">✓</span></td><td class="grid-cell empty difficulty-moderate" title="6 runs — moderate (~1 in 11 games)"></td><td class="grid-cell empty difficulty-moderate" title="7 runs — moderate (~1 in 15 games)"></td><td class="grid-cell empty difficulty-moderate" title="8 runs — moderate (~1 in 22 games)"></td><td class="grid-cell claimed" style="background:#002D7222;border-color:#002D7255" title="Scored 9 runs vs Tampa Bay Rays on 2026-03-26"><span class="check" style="color:#002D72">✓</span></td><td class="grid-cell claimed" style="background:#002D7222;border-color:#002D7255" title="Scored 10 runs vs Chicago Cubs on 2026-03-26"><span class="check" style="color:#002D72">✓</span></td><td class="grid-cell claimed first" style="background:#002D7222;border-color:#002D7255" title="Scored 11 runs vs Pittsburgh Pirates on 2026-03-26"><span class="check" style="color:#002D72">✓</span></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#002B5C"></span>
+            <span class="full">Minnesota Twins</span>
+            <span class="abbr">MIN</span>
+          </td>
+          <td class="grid-total">9/14</td>
+          <td class="grid-cell empty difficulty-moderate" title="0 runs — moderate (~1 in 12 games)"></td><td class="grid-cell claimed first" style="background:#002B5C22;border-color:#002B5C55" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#002B5C">✓</span></td><td class="grid-cell empty difficulty-common" title="2 runs — common (~1 in 8 games)"></td><td class="grid-cell claimed" style="background:#002B5C22;border-color:#002B5C55" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#002B5C">✓</span></td><td class="grid-cell claimed" style="background:#002B5C22;border-color:#002B5C55" title="Scored 4 runs vs Washington Nationals on 2026-03-26"><span class="check" style="color:#002B5C">✓</span></td><td class="grid-cell claimed" style="background:#002B5C22;border-color:#002B5C55" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#002B5C">✓</span></td><td class="grid-cell claimed" style="background:#002B5C22;border-color:#002B5C55" title="Scored 6 runs vs Seattle Mariners on 2026-03-26"><span class="check" style="color:#002B5C">✓</span></td><td class="grid-cell claimed" style="background:#002B5C22;border-color:#002B5C55" title="Scored 7 runs vs San Francisco Giants on 2026-03-25"><span class="check" style="color:#002B5C">✓</span></td><td class="grid-cell claimed" style="background:#002B5C22;border-color:#002B5C55" title="Scored 8 runs vs San Diego Padres on 2026-03-26"><span class="check" style="color:#002B5C">✓</span></td><td class="grid-cell claimed" style="background:#002B5C22;border-color:#002B5C55" title="Scored 9 runs vs Tampa Bay Rays on 2026-03-26"><span class="check" style="color:#002B5C">✓</span></td><td class="grid-cell claimed" style="background:#002B5C22;border-color:#002B5C55" title="Scored 10 runs vs Chicago Cubs on 2026-03-26"><span class="check" style="color:#002B5C">✓</span></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#092C5C"></span>
+            <span class="full">Tampa Bay Rays</span>
+            <span class="abbr">TB</span>
+          </td>
+          <td class="grid-total">7/14</td>
+          <td class="grid-cell empty difficulty-moderate" title="0 runs — moderate (~1 in 12 games)"></td><td class="grid-cell empty difficulty-common" title="1 runs — common (~1 in 10 games)"></td><td class="grid-cell claimed" style="background:#092C5C22;border-color:#092C5C55" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#092C5C">✓</span></td><td class="grid-cell claimed" style="background:#092C5C22;border-color:#092C5C55" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#092C5C">✓</span></td><td class="grid-cell claimed" style="background:#092C5C22;border-color:#092C5C55" title="Scored 4 runs vs Washington Nationals on 2026-03-26"><span class="check" style="color:#092C5C">✓</span></td><td class="grid-cell claimed" style="background:#092C5C22;border-color:#092C5C55" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#092C5C">✓</span></td><td class="grid-cell claimed" style="background:#092C5C22;border-color:#092C5C55" title="Scored 6 runs vs Seattle Mariners on 2026-03-26"><span class="check" style="color:#092C5C">✓</span></td><td class="grid-cell claimed" style="background:#092C5C22;border-color:#092C5C55" title="Scored 7 runs vs San Francisco Giants on 2026-03-25"><span class="check" style="color:#092C5C">✓</span></td><td class="grid-cell empty difficulty-moderate" title="8 runs — moderate (~1 in 22 games)"></td><td class="grid-cell empty difficulty-rare" title="9 runs — rare (~1 in 33 games)"></td><td class="grid-cell empty difficulty-rare" title="10 runs — rare (~1 in 56 games)"></td><td class="grid-cell claimed" style="background:#092C5C22;border-color:#092C5C55" title="Scored 11 runs vs Pittsburgh Pirates on 2026-03-26"><span class="check" style="color:#092C5C">✓</span></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#0C2340"></span>
+            <span class="full">Detroit Tigers</span>
+            <span class="abbr">DET</span>
+          </td>
+          <td class="grid-total">9/14</td>
+          <td class="grid-cell claimed" style="background:#0C234022;border-color:#0C234055" title="Scored 0 runs vs New York Yankees on 2026-03-25"><span class="check" style="color:#0C2340">✓</span></td><td class="grid-cell claimed" style="background:#0C234022;border-color:#0C234055" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#0C2340">✓</span></td><td class="grid-cell claimed" style="background:#0C234022;border-color:#0C234055" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#0C2340">✓</span></td><td class="grid-cell claimed" style="background:#0C234022;border-color:#0C234055" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#0C2340">✓</span></td><td class="grid-cell claimed" style="background:#0C234022;border-color:#0C234055" title="Scored 4 runs vs Washington Nationals on 2026-03-26"><span class="check" style="color:#0C2340">✓</span></td><td class="grid-cell claimed" style="background:#0C234022;border-color:#0C234055" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#0C2340">✓</span></td><td class="grid-cell claimed" style="background:#0C234022;border-color:#0C234055" title="Scored 6 runs vs Seattle Mariners on 2026-03-26"><span class="check" style="color:#0C2340">✓</span></td><td class="grid-cell empty difficulty-moderate" title="7 runs — moderate (~1 in 15 games)"></td><td class="grid-cell claimed first" style="background:#0C234022;border-color:#0C234055" title="Scored 8 runs vs San Diego Padres on 2026-03-26"><span class="check" style="color:#0C2340">✓</span></td><td class="grid-cell empty difficulty-rare" title="9 runs — rare (~1 in 33 games)"></td><td class="grid-cell empty difficulty-rare" title="10 runs — rare (~1 in 56 games)"></td><td class="grid-cell claimed" style="background:#0C234022;border-color:#0C234055" title="Scored 11 runs vs Pittsburgh Pirates on 2026-03-26"><span class="check" style="color:#0C2340">✓</span></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#0E3386"></span>
+            <span class="full">Chicago Cubs</span>
+            <span class="abbr">CHC</span>
+          </td>
+          <td class="grid-total">9/14</td>
+          <td class="grid-cell claimed" style="background:#0E338622;border-color:#0E338655" title="Scored 0 runs vs New York Yankees on 2026-03-25"><span class="check" style="color:#0E3386">✓</span></td><td class="grid-cell claimed" style="background:#0E338622;border-color:#0E338655" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#0E3386">✓</span></td><td class="grid-cell empty difficulty-common" title="2 runs — common (~1 in 8 games)"></td><td class="grid-cell claimed" style="background:#0E338622;border-color:#0E338655" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#0E3386">✓</span></td><td class="grid-cell claimed first" style="background:#0E338622;border-color:#0E338655" title="Scored 4 runs vs Washington Nationals on 2026-03-26"><span class="check" style="color:#0E3386">✓</span></td><td class="grid-cell claimed" style="background:#0E338622;border-color:#0E338655" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#0E3386">✓</span></td><td class="grid-cell claimed" style="background:#0E338622;border-color:#0E338655" title="Scored 6 runs vs Seattle Mariners on 2026-03-26"><span class="check" style="color:#0E3386">✓</span></td><td class="grid-cell claimed" style="background:#0E338622;border-color:#0E338655" title="Scored 7 runs vs San Francisco Giants on 2026-03-25"><span class="check" style="color:#0E3386">✓</span></td><td class="grid-cell empty difficulty-moderate" title="8 runs — moderate (~1 in 22 games)"></td><td class="grid-cell claimed" style="background:#0E338622;border-color:#0E338655" title="Scored 9 runs vs Tampa Bay Rays on 2026-03-26"><span class="check" style="color:#0E3386">✓</span></td><td class="grid-cell claimed" style="background:#0E338622;border-color:#0E338655" title="Scored 10 runs vs Chicago Cubs on 2026-03-26"><span class="check" style="color:#0E3386">✓</span></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#00A3E0"></span>
+            <span class="full">Miami Marlins</span>
+            <span class="abbr">MIA</span>
+          </td>
+          <td class="grid-total">8/14</td>
+          <td class="grid-cell claimed" style="background:#00A3E022;border-color:#00A3E055" title="Scored 0 runs vs New York Yankees on 2026-03-25"><span class="check" style="color:#00A3E0">✓</span></td><td class="grid-cell empty difficulty-common" title="1 runs — common (~1 in 10 games)"></td><td class="grid-cell claimed" style="background:#00A3E022;border-color:#00A3E055" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#00A3E0">✓</span></td><td class="grid-cell claimed" style="background:#00A3E022;border-color:#00A3E055" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#00A3E0">✓</span></td><td class="grid-cell claimed" style="background:#00A3E022;border-color:#00A3E055" title="Scored 4 runs vs Washington Nationals on 2026-03-26"><span class="check" style="color:#00A3E0">✓</span></td><td class="grid-cell empty difficulty-common" title="5 runs — common (~1 in 8 games)"></td><td class="grid-cell empty difficulty-moderate" title="6 runs — moderate (~1 in 11 games)"></td><td class="grid-cell claimed" style="background:#00A3E022;border-color:#00A3E055" title="Scored 7 runs vs San Francisco Giants on 2026-03-25"><span class="check" style="color:#00A3E0">✓</span></td><td class="grid-cell claimed" style="background:#00A3E022;border-color:#00A3E055" title="Scored 8 runs vs San Diego Padres on 2026-03-26"><span class="check" style="color:#00A3E0">✓</span></td><td class="grid-cell claimed" style="background:#00A3E022;border-color:#00A3E055" title="Scored 9 runs vs Tampa Bay Rays on 2026-03-26"><span class="check" style="color:#00A3E0">✓</span></td><td class="grid-cell claimed" style="background:#00A3E022;border-color:#00A3E055" title="Scored 10 runs vs Chicago Cubs on 2026-03-26"><span class="check" style="color:#00A3E0">✓</span></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#E81828"></span>
+            <span class="full">Philadelphia Phillies</span>
+            <span class="abbr">PHI</span>
+          </td>
+          <td class="grid-total">8/14</td>
+          <td class="grid-cell claimed" style="background:#E8182822;border-color:#E8182855" title="Scored 0 runs vs New York Yankees on 2026-03-25"><span class="check" style="color:#E81828">✓</span></td><td class="grid-cell claimed" style="background:#E8182822;border-color:#E8182855" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#E81828">✓</span></td><td class="grid-cell claimed" style="background:#E8182822;border-color:#E8182855" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#E81828">✓</span></td><td class="grid-cell claimed" style="background:#E8182822;border-color:#E8182855" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#E81828">✓</span></td><td class="grid-cell claimed" style="background:#E8182822;border-color:#E8182855" title="Scored 4 runs vs Washington Nationals on 2026-03-26"><span class="check" style="color:#E81828">✓</span></td><td class="grid-cell claimed first" style="background:#E8182822;border-color:#E8182855" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#E81828">✓</span></td><td class="grid-cell claimed" style="background:#E8182822;border-color:#E8182855" title="Scored 6 runs vs Seattle Mariners on 2026-03-26"><span class="check" style="color:#E81828">✓</span></td><td class="grid-cell empty difficulty-moderate" title="7 runs — moderate (~1 in 15 games)"></td><td class="grid-cell empty difficulty-moderate" title="8 runs — moderate (~1 in 22 games)"></td><td class="grid-cell empty difficulty-rare" title="9 runs — rare (~1 in 33 games)"></td><td class="grid-cell claimed" style="background:#E8182822;border-color:#E8182855" title="Scored 10 runs vs Chicago Cubs on 2026-03-26"><span class="check" style="color:#E81828">✓</span></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#E31937"></span>
+            <span class="full">Cleveland Guardians</span>
+            <span class="abbr">CLE</span>
+          </td>
+          <td class="grid-total">6/14</td>
+          <td class="grid-cell claimed" style="background:#E3193722;border-color:#E3193755" title="Scored 0 runs vs New York Yankees on 2026-03-25"><span class="check" style="color:#E31937">✓</span></td><td class="grid-cell claimed" style="background:#E3193722;border-color:#E3193755" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#E31937">✓</span></td><td class="grid-cell claimed" style="background:#E3193722;border-color:#E3193755" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#E31937">✓</span></td><td class="grid-cell empty difficulty-common" title="3 runs — common (~1 in 7 games)"></td><td class="grid-cell claimed" style="background:#E3193722;border-color:#E3193755" title="Scored 4 runs vs Washington Nationals on 2026-03-26"><span class="check" style="color:#E31937">✓</span></td><td class="grid-cell empty difficulty-common" title="5 runs — common (~1 in 8 games)"></td><td class="grid-cell claimed first" style="background:#E3193722;border-color:#E3193755" title="Scored 6 runs vs Seattle Mariners on 2026-03-26"><span class="check" style="color:#E31937">✓</span></td><td class="grid-cell empty difficulty-moderate" title="7 runs — moderate (~1 in 15 games)"></td><td class="grid-cell empty difficulty-moderate" title="8 runs — moderate (~1 in 22 games)"></td><td class="grid-cell empty difficulty-rare" title="9 runs — rare (~1 in 33 games)"></td><td class="grid-cell claimed" style="background:#E3193722;border-color:#E3193755" title="Scored 10 runs vs Chicago Cubs on 2026-03-26"><span class="check" style="color:#E31937">✓</span></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#333366"></span>
+            <span class="full">Colorado Rockies</span>
+            <span class="abbr">COL</span>
+          </td>
+          <td class="grid-total">6/14</td>
+          <td class="grid-cell empty difficulty-moderate" title="0 runs — moderate (~1 in 12 games)"></td><td class="grid-cell claimed" style="background:#33336622;border-color:#33336655" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#333366">✓</span></td><td class="grid-cell claimed" style="background:#33336622;border-color:#33336655" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#333366">✓</span></td><td class="grid-cell claimed" style="background:#33336622;border-color:#33336655" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#333366">✓</span></td><td class="grid-cell claimed" style="background:#33336622;border-color:#33336655" title="Scored 4 runs vs Washington Nationals on 2026-03-26"><span class="check" style="color:#333366">✓</span></td><td class="grid-cell claimed" style="background:#33336622;border-color:#33336655" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#333366">✓</span></td><td class="grid-cell empty difficulty-moderate" title="6 runs — moderate (~1 in 11 games)"></td><td class="grid-cell empty difficulty-moderate" title="7 runs — moderate (~1 in 15 games)"></td><td class="grid-cell empty difficulty-moderate" title="8 runs — moderate (~1 in 22 games)"></td><td class="grid-cell claimed" style="background:#33336622;border-color:#33336655" title="Scored 9 runs vs Tampa Bay Rays on 2026-03-26"><span class="check" style="color:#333366">✓</span></td><td class="grid-cell empty difficulty-rare" title="10 runs — rare (~1 in 56 games)"></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#12284B"></span>
+            <span class="full">Milwaukee Brewers</span>
+            <span class="abbr">MIL</span>
+          </td>
+          <td class="grid-total">6/14</td>
+          <td class="grid-cell claimed" style="background:#12284B22;border-color:#12284B55" title="Scored 0 runs vs New York Yankees on 2026-03-25"><span class="check" style="color:#12284B">✓</span></td><td class="grid-cell empty difficulty-common" title="1 runs — common (~1 in 10 games)"></td><td class="grid-cell claimed" style="background:#12284B22;border-color:#12284B55" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#12284B">✓</span></td><td class="grid-cell empty difficulty-common" title="3 runs — common (~1 in 7 games)"></td><td class="grid-cell empty difficulty-common" title="4 runs — common (~1 in 7 games)"></td><td class="grid-cell claimed" style="background:#12284B22;border-color:#12284B55" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#12284B">✓</span></td><td class="grid-cell claimed" style="background:#12284B22;border-color:#12284B55" title="Scored 6 runs vs Seattle Mariners on 2026-03-26"><span class="check" style="color:#12284B">✓</span></td><td class="grid-cell empty difficulty-moderate" title="7 runs — moderate (~1 in 15 games)"></td><td class="grid-cell claimed" style="background:#12284B22;border-color:#12284B55" title="Scored 8 runs vs San Diego Padres on 2026-03-26"><span class="check" style="color:#12284B">✓</span></td><td class="grid-cell claimed" style="background:#12284B22;border-color:#12284B55" title="Scored 9 runs vs Tampa Bay Rays on 2026-03-26"><span class="check" style="color:#12284B">✓</span></td><td class="grid-cell empty difficulty-rare" title="10 runs — rare (~1 in 56 games)"></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#27251F"></span>
+            <span class="full">Chicago White Sox</span>
+            <span class="abbr">CWS</span>
+          </td>
+          <td class="grid-total">8/14</td>
+          <td class="grid-cell claimed" style="background:#27251F22;border-color:#27251F55" title="Scored 0 runs vs New York Yankees on 2026-03-25"><span class="check" style="color:#27251F">✓</span></td><td class="grid-cell claimed" style="background:#27251F22;border-color:#27251F55" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#27251F">✓</span></td><td class="grid-cell claimed first" style="background:#27251F22;border-color:#27251F55" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#27251F">✓</span></td><td class="grid-cell claimed" style="background:#27251F22;border-color:#27251F55" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#27251F">✓</span></td><td class="grid-cell empty difficulty-common" title="4 runs — common (~1 in 7 games)"></td><td class="grid-cell claimed" style="background:#27251F22;border-color:#27251F55" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#27251F">✓</span></td><td class="grid-cell claimed" style="background:#27251F22;border-color:#27251F55" title="Scored 6 runs vs Seattle Mariners on 2026-03-26"><span class="check" style="color:#27251F">✓</span></td><td class="grid-cell claimed" style="background:#27251F22;border-color:#27251F55" title="Scored 7 runs vs San Francisco Giants on 2026-03-25"><span class="check" style="color:#27251F">✓</span></td><td class="grid-cell empty difficulty-moderate" title="8 runs — moderate (~1 in 22 games)"></td><td class="grid-cell claimed" style="background:#27251F22;border-color:#27251F55" title="Scored 9 runs vs Tampa Bay Rays on 2026-03-26"><span class="check" style="color:#27251F">✓</span></td><td class="grid-cell empty difficulty-rare" title="10 runs — rare (~1 in 56 games)"></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#C41E3A"></span>
+            <span class="full">St. Louis Cardinals</span>
+            <span class="abbr">STL</span>
+          </td>
+          <td class="grid-total">7/14</td>
+          <td class="grid-cell claimed" style="background:#C41E3A22;border-color:#C41E3A55" title="Scored 0 runs vs New York Yankees on 2026-03-25"><span class="check" style="color:#C41E3A">✓</span></td><td class="grid-cell empty difficulty-common" title="1 runs — common (~1 in 10 games)"></td><td class="grid-cell claimed" style="background:#C41E3A22;border-color:#C41E3A55" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#C41E3A">✓</span></td><td class="grid-cell claimed" style="background:#C41E3A22;border-color:#C41E3A55" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#C41E3A">✓</span></td><td class="grid-cell empty difficulty-common" title="4 runs — common (~1 in 7 games)"></td><td class="grid-cell claimed" style="background:#C41E3A22;border-color:#C41E3A55" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#C41E3A">✓</span></td><td class="grid-cell claimed" style="background:#C41E3A22;border-color:#C41E3A55" title="Scored 6 runs vs Seattle Mariners on 2026-03-26"><span class="check" style="color:#C41E3A">✓</span></td><td class="grid-cell claimed" style="background:#C41E3A22;border-color:#C41E3A55" title="Scored 7 runs vs San Francisco Giants on 2026-03-25"><span class="check" style="color:#C41E3A">✓</span></td><td class="grid-cell empty difficulty-moderate" title="8 runs — moderate (~1 in 22 games)"></td><td class="grid-cell claimed first" style="background:#C41E3A22;border-color:#C41E3A55" title="Scored 9 runs vs Tampa Bay Rays on 2026-03-26"><span class="check" style="color:#C41E3A">✓</span></td><td class="grid-cell empty difficulty-rare" title="10 runs — rare (~1 in 56 games)"></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#003087"></span>
+            <span class="full">New York Yankees</span>
+            <span class="abbr">NYY</span>
+          </td>
+          <td class="grid-total">9/14</td>
+          <td class="grid-cell claimed" style="background:#00308722;border-color:#00308755" title="Scored 0 runs vs New York Yankees on 2026-03-25"><span class="check" style="color:#003087">✓</span></td><td class="grid-cell claimed" style="background:#00308722;border-color:#00308755" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#003087">✓</span></td><td class="grid-cell claimed" style="background:#00308722;border-color:#00308755" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#003087">✓</span></td><td class="grid-cell claimed" style="background:#00308722;border-color:#00308755" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#003087">✓</span></td><td class="grid-cell empty difficulty-common" title="4 runs — common (~1 in 7 games)"></td><td class="grid-cell claimed" style="background:#00308722;border-color:#00308755" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#003087">✓</span></td><td class="grid-cell claimed" style="background:#00308722;border-color:#00308755" title="Scored 6 runs vs Seattle Mariners on 2026-03-26"><span class="check" style="color:#003087">✓</span></td><td class="grid-cell claimed first" style="background:#00308722;border-color:#00308755" title="Scored 7 runs vs San Francisco Giants on 2026-03-25"><span class="check" style="color:#003087">✓</span></td><td class="grid-cell claimed" style="background:#00308722;border-color:#00308755" title="Scored 8 runs vs San Diego Padres on 2026-03-26"><span class="check" style="color:#003087">✓</span></td><td class="grid-cell claimed" style="background:#00308722;border-color:#00308755" title="Scored 9 runs vs Tampa Bay Rays on 2026-03-26"><span class="check" style="color:#003087">✓</span></td><td class="grid-cell empty difficulty-rare" title="10 runs — rare (~1 in 56 games)"></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#0C2C56"></span>
+            <span class="full">Seattle Mariners</span>
+            <span class="abbr">SEA</span>
+          </td>
+          <td class="grid-total">8/14</td>
+          <td class="grid-cell claimed" style="background:#0C2C5622;border-color:#0C2C5655" title="Scored 0 runs vs New York Yankees on 2026-03-25"><span class="check" style="color:#0C2C56">✓</span></td><td class="grid-cell claimed" style="background:#0C2C5622;border-color:#0C2C5655" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#0C2C56">✓</span></td><td class="grid-cell claimed" style="background:#0C2C5622;border-color:#0C2C5655" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#0C2C56">✓</span></td><td class="grid-cell claimed" style="background:#0C2C5622;border-color:#0C2C5655" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#0C2C56">✓</span></td><td class="grid-cell claimed" style="background:#0C2C5622;border-color:#0C2C5655" title="Scored 4 runs vs Washington Nationals on 2026-03-26"><span class="check" style="color:#0C2C56">✓</span></td><td class="grid-cell claimed" style="background:#0C2C5622;border-color:#0C2C5655" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#0C2C56">✓</span></td><td class="grid-cell empty difficulty-moderate" title="6 runs — moderate (~1 in 11 games)"></td><td class="grid-cell claimed" style="background:#0C2C5622;border-color:#0C2C5655" title="Scored 7 runs vs San Francisco Giants on 2026-03-25"><span class="check" style="color:#0C2C56">✓</span></td><td class="grid-cell claimed" style="background:#0C2C5622;border-color:#0C2C5655" title="Scored 8 runs vs San Diego Padres on 2026-03-26"><span class="check" style="color:#0C2C56">✓</span></td><td class="grid-cell empty difficulty-rare" title="9 runs — rare (~1 in 33 games)"></td><td class="grid-cell empty difficulty-rare" title="10 runs — rare (~1 in 56 games)"></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#2F241D"></span>
+            <span class="full">San Diego Padres</span>
+            <span class="abbr">SD</span>
+          </td>
+          <td class="grid-total">6/14</td>
+          <td class="grid-cell empty difficulty-moderate" title="0 runs — moderate (~1 in 12 games)"></td><td class="grid-cell claimed" style="background:#2F241D22;border-color:#2F241D55" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#2F241D">✓</span></td><td class="grid-cell claimed" style="background:#2F241D22;border-color:#2F241D55" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#2F241D">✓</span></td><td class="grid-cell claimed" style="background:#2F241D22;border-color:#2F241D55" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#2F241D">✓</span></td><td class="grid-cell empty difficulty-common" title="4 runs — common (~1 in 7 games)"></td><td class="grid-cell claimed" style="background:#2F241D22;border-color:#2F241D55" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#2F241D">✓</span></td><td class="grid-cell empty difficulty-moderate" title="6 runs — moderate (~1 in 11 games)"></td><td class="grid-cell claimed" style="background:#2F241D22;border-color:#2F241D55" title="Scored 7 runs vs San Francisco Giants on 2026-03-25"><span class="check" style="color:#2F241D">✓</span></td><td class="grid-cell claimed" style="background:#2F241D22;border-color:#2F241D55" title="Scored 8 runs vs San Diego Padres on 2026-03-26"><span class="check" style="color:#2F241D">✓</span></td><td class="grid-cell empty difficulty-rare" title="9 runs — rare (~1 in 33 games)"></td><td class="grid-cell empty difficulty-rare" title="10 runs — rare (~1 in 56 games)"></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#CE1141"></span>
+            <span class="full">Atlanta Braves</span>
+            <span class="abbr">ATL</span>
+          </td>
+          <td class="grid-total">7/14</td>
+          <td class="grid-cell empty difficulty-moderate" title="0 runs — moderate (~1 in 12 games)"></td><td class="grid-cell claimed" style="background:#CE114122;border-color:#CE114155" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#CE1141">✓</span></td><td class="grid-cell claimed" style="background:#CE114122;border-color:#CE114155" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#CE1141">✓</span></td><td class="grid-cell empty difficulty-common" title="3 runs — common (~1 in 7 games)"></td><td class="grid-cell claimed" style="background:#CE114122;border-color:#CE114155" title="Scored 4 runs vs Washington Nationals on 2026-03-26"><span class="check" style="color:#CE1141">✓</span></td><td class="grid-cell claimed" style="background:#CE114122;border-color:#CE114155" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#CE1141">✓</span></td><td class="grid-cell claimed" style="background:#CE114122;border-color:#CE114155" title="Scored 6 runs vs Seattle Mariners on 2026-03-26"><span class="check" style="color:#CE1141">✓</span></td><td class="grid-cell claimed" style="background:#CE114122;border-color:#CE114155" title="Scored 7 runs vs San Francisco Giants on 2026-03-25"><span class="check" style="color:#CE1141">✓</span></td><td class="grid-cell claimed" style="background:#CE114122;border-color:#CE114155" title="Scored 8 runs vs San Diego Padres on 2026-03-26"><span class="check" style="color:#CE1141">✓</span></td><td class="grid-cell empty difficulty-rare" title="9 runs — rare (~1 in 33 games)"></td><td class="grid-cell empty difficulty-rare" title="10 runs — rare (~1 in 56 games)"></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#BA0021"></span>
+            <span class="full">Los Angeles Angels</span>
+            <span class="abbr">LAA</span>
+          </td>
+          <td class="grid-total">7/14</td>
+          <td class="grid-cell empty difficulty-moderate" title="0 runs — moderate (~1 in 12 games)"></td><td class="grid-cell claimed" style="background:#BA002122;border-color:#BA002155" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#BA0021">✓</span></td><td class="grid-cell claimed" style="background:#BA002122;border-color:#BA002155" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#BA0021">✓</span></td><td class="grid-cell claimed" style="background:#BA002122;border-color:#BA002155" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#BA0021">✓</span></td><td class="grid-cell empty difficulty-common" title="4 runs — common (~1 in 7 games)"></td><td class="grid-cell empty difficulty-common" title="5 runs — common (~1 in 8 games)"></td><td class="grid-cell claimed" style="background:#BA002122;border-color:#BA002155" title="Scored 6 runs vs Seattle Mariners on 2026-03-26"><span class="check" style="color:#BA0021">✓</span></td><td class="grid-cell claimed" style="background:#BA002122;border-color:#BA002155" title="Scored 7 runs vs San Francisco Giants on 2026-03-25"><span class="check" style="color:#BA0021">✓</span></td><td class="grid-cell claimed" style="background:#BA002122;border-color:#BA002155" title="Scored 8 runs vs San Diego Padres on 2026-03-26"><span class="check" style="color:#BA0021">✓</span></td><td class="grid-cell claimed" style="background:#BA002122;border-color:#BA002155" title="Scored 9 runs vs Tampa Bay Rays on 2026-03-26"><span class="check" style="color:#BA0021">✓</span></td><td class="grid-cell empty difficulty-rare" title="10 runs — rare (~1 in 56 games)"></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#FD5A1E"></span>
+            <span class="full">San Francisco Giants</span>
+            <span class="abbr">SF</span>
+          </td>
+          <td class="grid-total">9/14</td>
+          <td class="grid-cell claimed first" style="background:#FD5A1E22;border-color:#FD5A1E55" title="Scored 0 runs vs New York Yankees on 2026-03-25"><span class="check" style="color:#FD5A1E">✓</span></td><td class="grid-cell claimed" style="background:#FD5A1E22;border-color:#FD5A1E55" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#FD5A1E">✓</span></td><td class="grid-cell claimed" style="background:#FD5A1E22;border-color:#FD5A1E55" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#FD5A1E">✓</span></td><td class="grid-cell claimed" style="background:#FD5A1E22;border-color:#FD5A1E55" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#FD5A1E">✓</span></td><td class="grid-cell claimed" style="background:#FD5A1E22;border-color:#FD5A1E55" title="Scored 4 runs vs Washington Nationals on 2026-03-26"><span class="check" style="color:#FD5A1E">✓</span></td><td class="grid-cell claimed" style="background:#FD5A1E22;border-color:#FD5A1E55" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#FD5A1E">✓</span></td><td class="grid-cell claimed" style="background:#FD5A1E22;border-color:#FD5A1E55" title="Scored 6 runs vs Seattle Mariners on 2026-03-26"><span class="check" style="color:#FD5A1E">✓</span></td><td class="grid-cell claimed" style="background:#FD5A1E22;border-color:#FD5A1E55" title="Scored 7 runs vs San Francisco Giants on 2026-03-25"><span class="check" style="color:#FD5A1E">✓</span></td><td class="grid-cell empty difficulty-moderate" title="8 runs — moderate (~1 in 22 games)"></td><td class="grid-cell claimed" style="background:#FD5A1E22;border-color:#FD5A1E55" title="Scored 9 runs vs Tampa Bay Rays on 2026-03-26"><span class="check" style="color:#FD5A1E">✓</span></td><td class="grid-cell empty difficulty-rare" title="10 runs — rare (~1 in 56 games)"></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#A71930"></span>
+            <span class="full">Arizona Diamondbacks</span>
+            <span class="abbr">ARI</span>
+          </td>
+          <td class="grid-total">8/14</td>
+          <td class="grid-cell claimed" style="background:#A7193022;border-color:#A7193055" title="Scored 0 runs vs New York Yankees on 2026-03-25"><span class="check" style="color:#A71930">✓</span></td><td class="grid-cell claimed" style="background:#A7193022;border-color:#A7193055" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#A71930">✓</span></td><td class="grid-cell claimed" style="background:#A7193022;border-color:#A7193055" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#A71930">✓</span></td><td class="grid-cell claimed" style="background:#A7193022;border-color:#A7193055" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#A71930">✓</span></td><td class="grid-cell claimed" style="background:#A7193022;border-color:#A7193055" title="Scored 4 runs vs Washington Nationals on 2026-03-26"><span class="check" style="color:#A71930">✓</span></td><td class="grid-cell empty difficulty-common" title="5 runs — common (~1 in 8 games)"></td><td class="grid-cell claimed" style="background:#A7193022;border-color:#A7193055" title="Scored 6 runs vs Seattle Mariners on 2026-03-26"><span class="check" style="color:#A71930">✓</span></td><td class="grid-cell claimed" style="background:#A7193022;border-color:#A7193055" title="Scored 7 runs vs San Francisco Giants on 2026-03-25"><span class="check" style="color:#A71930">✓</span></td><td class="grid-cell empty difficulty-moderate" title="8 runs — moderate (~1 in 22 games)"></td><td class="grid-cell claimed" style="background:#A7193022;border-color:#A7193055" title="Scored 9 runs vs Tampa Bay Rays on 2026-03-26"><span class="check" style="color:#A71930">✓</span></td><td class="grid-cell empty difficulty-rare" title="10 runs — rare (~1 in 56 games)"></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#BD3039"></span>
+            <span class="full">Boston Red Sox</span>
+            <span class="abbr">BOS</span>
+          </td>
+          <td class="grid-total">6/14</td>
+          <td class="grid-cell empty difficulty-moderate" title="0 runs — moderate (~1 in 12 games)"></td><td class="grid-cell claimed" style="background:#BD303922;border-color:#BD303955" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#BD3039">✓</span></td><td class="grid-cell claimed" style="background:#BD303922;border-color:#BD303955" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#BD3039">✓</span></td><td class="grid-cell claimed first" style="background:#BD303922;border-color:#BD303955" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#BD3039">✓</span></td><td class="grid-cell claimed" style="background:#BD303922;border-color:#BD303955" title="Scored 4 runs vs Washington Nationals on 2026-03-26"><span class="check" style="color:#BD3039">✓</span></td><td class="grid-cell claimed" style="background:#BD303922;border-color:#BD303955" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#BD3039">✓</span></td><td class="grid-cell claimed" style="background:#BD303922;border-color:#BD303955" title="Scored 6 runs vs Seattle Mariners on 2026-03-26"><span class="check" style="color:#BD3039">✓</span></td><td class="grid-cell empty difficulty-moderate" title="7 runs — moderate (~1 in 15 games)"></td><td class="grid-cell empty difficulty-moderate" title="8 runs — moderate (~1 in 22 games)"></td><td class="grid-cell empty difficulty-rare" title="9 runs — rare (~1 in 33 games)"></td><td class="grid-cell empty difficulty-rare" title="10 runs — rare (~1 in 56 games)"></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#DF4601"></span>
+            <span class="full">Baltimore Orioles</span>
+            <span class="abbr">BAL</span>
+          </td>
+          <td class="grid-total">5/14</td>
+          <td class="grid-cell empty difficulty-moderate" title="0 runs — moderate (~1 in 12 games)"></td><td class="grid-cell claimed" style="background:#DF460122;border-color:#DF460155" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#DF4601">✓</span></td><td class="grid-cell claimed" style="background:#DF460122;border-color:#DF460155" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#DF4601">✓</span></td><td class="grid-cell empty difficulty-common" title="3 runs — common (~1 in 7 games)"></td><td class="grid-cell claimed" style="background:#DF460122;border-color:#DF460155" title="Scored 4 runs vs Washington Nationals on 2026-03-26"><span class="check" style="color:#DF4601">✓</span></td><td class="grid-cell claimed" style="background:#DF460122;border-color:#DF460155" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#DF4601">✓</span></td><td class="grid-cell empty difficulty-moderate" title="6 runs — moderate (~1 in 11 games)"></td><td class="grid-cell empty difficulty-moderate" title="7 runs — moderate (~1 in 15 games)"></td><td class="grid-cell claimed" style="background:#DF460122;border-color:#DF460155" title="Scored 8 runs vs San Diego Padres on 2026-03-26"><span class="check" style="color:#DF4601">✓</span></td><td class="grid-cell empty difficulty-rare" title="9 runs — rare (~1 in 33 games)"></td><td class="grid-cell empty difficulty-rare" title="10 runs — rare (~1 in 56 games)"></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#27251F"></span>
+            <span class="full">Pittsburgh Pirates</span>
+            <span class="abbr">PIT</span>
+          </td>
+          <td class="grid-total">7/14</td>
+          <td class="grid-cell claimed" style="background:#27251F22;border-color:#27251F55" title="Scored 0 runs vs New York Yankees on 2026-03-25"><span class="check" style="color:#27251F">✓</span></td><td class="grid-cell empty difficulty-common" title="1 runs — common (~1 in 10 games)"></td><td class="grid-cell claimed" style="background:#27251F22;border-color:#27251F55" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#27251F">✓</span></td><td class="grid-cell claimed" style="background:#27251F22;border-color:#27251F55" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#27251F">✓</span></td><td class="grid-cell claimed" style="background:#27251F22;border-color:#27251F55" title="Scored 4 runs vs Washington Nationals on 2026-03-26"><span class="check" style="color:#27251F">✓</span></td><td class="grid-cell claimed" style="background:#27251F22;border-color:#27251F55" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#27251F">✓</span></td><td class="grid-cell empty difficulty-moderate" title="6 runs — moderate (~1 in 11 games)"></td><td class="grid-cell claimed" style="background:#27251F22;border-color:#27251F55" title="Scored 7 runs vs San Francisco Giants on 2026-03-25"><span class="check" style="color:#27251F">✓</span></td><td class="grid-cell claimed" style="background:#27251F22;border-color:#27251F55" title="Scored 8 runs vs San Diego Padres on 2026-03-26"><span class="check" style="color:#27251F">✓</span></td><td class="grid-cell empty difficulty-rare" title="9 runs — rare (~1 in 33 games)"></td><td class="grid-cell empty difficulty-rare" title="10 runs — rare (~1 in 56 games)"></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#C6011F"></span>
+            <span class="full">Cincinnati Reds</span>
+            <span class="abbr">CIN</span>
+          </td>
+          <td class="grid-total">7/14</td>
+          <td class="grid-cell claimed" style="background:#C6011F22;border-color:#C6011F55" title="Scored 0 runs vs New York Yankees on 2026-03-25"><span class="check" style="color:#C6011F">✓</span></td><td class="grid-cell claimed" style="background:#C6011F22;border-color:#C6011F55" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#C6011F">✓</span></td><td class="grid-cell claimed" style="background:#C6011F22;border-color:#C6011F55" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#C6011F">✓</span></td><td class="grid-cell claimed" style="background:#C6011F22;border-color:#C6011F55" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#C6011F">✓</span></td><td class="grid-cell claimed" style="background:#C6011F22;border-color:#C6011F55" title="Scored 4 runs vs Washington Nationals on 2026-03-26"><span class="check" style="color:#C6011F">✓</span></td><td class="grid-cell claimed" style="background:#C6011F22;border-color:#C6011F55" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#C6011F">✓</span></td><td class="grid-cell claimed" style="background:#C6011F22;border-color:#C6011F55" title="Scored 6 runs vs Seattle Mariners on 2026-03-26"><span class="check" style="color:#C6011F">✓</span></td><td class="grid-cell empty difficulty-moderate" title="7 runs — moderate (~1 in 15 games)"></td><td class="grid-cell empty difficulty-moderate" title="8 runs — moderate (~1 in 22 games)"></td><td class="grid-cell empty difficulty-rare" title="9 runs — rare (~1 in 33 games)"></td><td class="grid-cell empty difficulty-rare" title="10 runs — rare (~1 in 56 games)"></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#134A8E"></span>
+            <span class="full">Toronto Blue Jays</span>
+            <span class="abbr">TOR</span>
+          </td>
+          <td class="grid-total">7/14</td>
+          <td class="grid-cell claimed" style="background:#134A8E22;border-color:#134A8E55" title="Scored 0 runs vs New York Yankees on 2026-03-25"><span class="check" style="color:#134A8E">✓</span></td><td class="grid-cell claimed" style="background:#134A8E22;border-color:#134A8E55" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#134A8E">✓</span></td><td class="grid-cell claimed" style="background:#134A8E22;border-color:#134A8E55" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#134A8E">✓</span></td><td class="grid-cell claimed" style="background:#134A8E22;border-color:#134A8E55" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#134A8E">✓</span></td><td class="grid-cell claimed" style="background:#134A8E22;border-color:#134A8E55" title="Scored 4 runs vs Washington Nationals on 2026-03-26"><span class="check" style="color:#134A8E">✓</span></td><td class="grid-cell claimed" style="background:#134A8E22;border-color:#134A8E55" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#134A8E">✓</span></td><td class="grid-cell empty difficulty-moderate" title="6 runs — moderate (~1 in 11 games)"></td><td class="grid-cell empty difficulty-moderate" title="7 runs — moderate (~1 in 15 games)"></td><td class="grid-cell claimed" style="background:#134A8E22;border-color:#134A8E55" title="Scored 8 runs vs San Diego Padres on 2026-03-26"><span class="check" style="color:#134A8E">✓</span></td><td class="grid-cell empty difficulty-rare" title="9 runs — rare (~1 in 33 games)"></td><td class="grid-cell empty difficulty-rare" title="10 runs — rare (~1 in 56 games)"></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr>
+        <tr>
+          <td class="grid-team">
+            <span class="dot" style="background:#003278"></span>
+            <span class="full">Texas Rangers</span>
+            <span class="abbr">TEX</span>
+          </td>
+          <td class="grid-total">6/14</td>
+          <td class="grid-cell claimed" style="background:#00327822;border-color:#00327855" title="Scored 0 runs vs New York Yankees on 2026-03-25"><span class="check" style="color:#003278">✓</span></td><td class="grid-cell claimed" style="background:#00327822;border-color:#00327855" title="Scored 1 runs vs Baltimore Orioles on 2026-03-26"><span class="check" style="color:#003278">✓</span></td><td class="grid-cell claimed" style="background:#00327822;border-color:#00327855" title="Scored 2 runs vs Milwaukee Brewers on 2026-03-26"><span class="check" style="color:#003278">✓</span></td><td class="grid-cell claimed" style="background:#00327822;border-color:#00327855" title="Scored 3 runs vs Cincinnati Reds on 2026-03-26"><span class="check" style="color:#003278">✓</span></td><td class="grid-cell empty difficulty-common" title="4 runs — common (~1 in 7 games)"></td><td class="grid-cell claimed" style="background:#00327822;border-color:#00327855" title="Scored 5 runs vs Texas Rangers on 2026-03-26"><span class="check" style="color:#003278">✓</span></td><td class="grid-cell empty difficulty-moderate" title="6 runs — moderate (~1 in 11 games)"></td><td class="grid-cell empty difficulty-moderate" title="7 runs — moderate (~1 in 15 games)"></td><td class="grid-cell claimed" style="background:#00327822;border-color:#00327855" title="Scored 8 runs vs San Diego Padres on 2026-03-26"><span class="check" style="color:#003278">✓</span></td><td class="grid-cell empty difficulty-rare" title="9 runs — rare (~1 in 33 games)"></td><td class="grid-cell empty difficulty-rare" title="10 runs — rare (~1 in 56 games)"></td><td class="grid-cell empty difficulty-rare" title="11 runs — rare (~1 in 83 games)"></td><td class="grid-cell empty difficulty-very rare" title="12 runs — very rare (~1 in 143 games)"></td><td class="grid-cell empty difficulty-very rare" title="13 runs — very rare (~1 in 200 games)"></td>
+        </tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- FIRST CLAIMS -->
+<div class="section">
+  <h2>First Team to Score Each Total</h2>
+  <div class="card">
+    <table class="claims-table">
+      <thead>
+        <tr><th>Runs</th><th>Difficulty</th><th>Team</th><th>Date</th><th>Opponent</th></tr>
+      </thead>
+      <tbody>
+            <tr>
+              <td class="slot-num">0</td>
+              <td><span class="diff-badge moderate">moderate</span></td>
+              <td class="team-name">
+                <span class="dot" style="background:#FD5A1E"></span>
+                <span class="full">San Francisco Giants</span>
+                <span class="abbr">SF</span>
+              </td>
+              <td>2026-03-25</td>
+              <td>vs New York Yankees</td>
+            </tr>
+            <tr>
+              <td class="slot-num">1</td>
+              <td><span class="diff-badge common">common</span></td>
+              <td class="team-name">
+                <span class="dot" style="background:#002B5C"></span>
+                <span class="full">Minnesota Twins</span>
+                <span class="abbr">MIN</span>
+              </td>
+              <td>2026-03-26</td>
+              <td>vs Baltimore Orioles</td>
+            </tr>
+            <tr>
+              <td class="slot-num">2</td>
+              <td><span class="diff-badge common">common</span></td>
+              <td class="team-name">
+                <span class="dot" style="background:#27251F"></span>
+                <span class="full">Chicago White Sox</span>
+                <span class="abbr">CWS</span>
+              </td>
+              <td>2026-03-26</td>
+              <td>vs Milwaukee Brewers</td>
+            </tr>
+            <tr>
+              <td class="slot-num">3</td>
+              <td><span class="diff-badge common">common</span></td>
+              <td class="team-name">
+                <span class="dot" style="background:#BD3039"></span>
+                <span class="full">Boston Red Sox</span>
+                <span class="abbr">BOS</span>
+              </td>
+              <td>2026-03-26</td>
+              <td>vs Cincinnati Reds</td>
+            </tr>
+            <tr>
+              <td class="slot-num">4</td>
+              <td><span class="diff-badge common">common</span></td>
+              <td class="team-name">
+                <span class="dot" style="background:#0E3386"></span>
+                <span class="full">Chicago Cubs</span>
+                <span class="abbr">CHC</span>
+              </td>
+              <td>2026-03-26</td>
+              <td>vs Washington Nationals</td>
+            </tr>
+            <tr>
+              <td class="slot-num">5</td>
+              <td><span class="diff-badge common">common</span></td>
+              <td class="team-name">
+                <span class="dot" style="background:#E81828"></span>
+                <span class="full">Philadelphia Phillies</span>
+                <span class="abbr">PHI</span>
+              </td>
+              <td>2026-03-26</td>
+              <td>vs Texas Rangers</td>
+            </tr>
+            <tr>
+              <td class="slot-num">6</td>
+              <td><span class="diff-badge moderate">moderate</span></td>
+              <td class="team-name">
+                <span class="dot" style="background:#E31937"></span>
+                <span class="full">Cleveland Guardians</span>
+                <span class="abbr">CLE</span>
+              </td>
+              <td>2026-03-26</td>
+              <td>vs Seattle Mariners</td>
+            </tr>
+            <tr>
+              <td class="slot-num">7</td>
+              <td><span class="diff-badge moderate">moderate</span></td>
+              <td class="team-name">
+                <span class="dot" style="background:#003087"></span>
+                <span class="full">New York Yankees</span>
+                <span class="abbr">NYY</span>
+              </td>
+              <td>2026-03-25</td>
+              <td>vs San Francisco Giants</td>
+            </tr>
+            <tr>
+              <td class="slot-num">8</td>
+              <td><span class="diff-badge moderate">moderate</span></td>
+              <td class="team-name">
+                <span class="dot" style="background:#0C2340"></span>
+                <span class="full">Detroit Tigers</span>
+                <span class="abbr">DET</span>
+              </td>
+              <td>2026-03-26</td>
+              <td>vs San Diego Padres</td>
+            </tr>
+            <tr>
+              <td class="slot-num">9</td>
+              <td><span class="diff-badge rare">rare</span></td>
+              <td class="team-name">
+                <span class="dot" style="background:#C41E3A"></span>
+                <span class="full">St. Louis Cardinals</span>
+                <span class="abbr">STL</span>
+              </td>
+              <td>2026-03-26</td>
+              <td>vs Tampa Bay Rays</td>
+            </tr>
+            <tr>
+              <td class="slot-num">10</td>
+              <td><span class="diff-badge rare">rare</span></td>
+              <td class="team-name">
+                <span class="dot" style="background:#AB0003"></span>
+                <span class="full">Washington Nationals</span>
+                <span class="abbr">WSH</span>
+              </td>
+              <td>2026-03-26</td>
+              <td>vs Chicago Cubs</td>
+            </tr>
+            <tr>
+              <td class="slot-num">11</td>
+              <td><span class="diff-badge rare">rare</span></td>
+              <td class="team-name">
+                <span class="dot" style="background:#002D72"></span>
+                <span class="full">New York Mets</span>
+                <span class="abbr">NYM</span>
+              </td>
+              <td>2026-03-26</td>
+              <td>vs Pittsburgh Pirates</td>
+            </tr>
+            <tr>
+              <td class="slot-num">12</td>
+              <td><span class="diff-badge very rare">very rare</span></td>
+              <td class="team-name">
+                <span class="dot" style="background:#003831"></span>
+                <span class="full">Athletics</span>
+                <span class="abbr">ATH</span>
+              </td>
+              <td>2026-04-05</td>
+              <td>vs Houston Astros</td>
+            </tr>
+            <tr>
+              <td class="slot-num">13</td>
+              <td><span class="diff-badge very rare">very rare</span></td>
+              <td class="team-name">
+                <span class="dot" style="background:#AB0003"></span>
+                <span class="full">Washington Nationals</span>
+                <span class="abbr">WSH</span>
+              </td>
+              <td>2026-03-30</td>
+              <td>vs Philadelphia Phillies</td>
+            </tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div style="color:var(--muted);font-size:0.78rem;text-align:center;margin-top:32px;padding-bottom:32px">
+  Data: MLB Stats API (statsapi.mlb.com) &nbsp;·&nbsp;
+  Probabilities: Monte Carlo (10,000 simulations) with historical MLB run distribution prior &nbsp;·&nbsp;
+  Refresh: <code>python mlb_pool_tracker.py</code>
+</div>
+
+</body>
+</html>
