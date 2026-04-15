@@ -109,8 +109,10 @@ def build_run_distributions(team_run_dist):
     team_dist = {}
     for team, runs in team_run_dist.items():
         n = len(runs)
-        # Trust team data more as sample grows; fully trust at 81 games (half season)
-        team_weight = min(n, 81) / 81
+        # Require a full season (162 games) before trusting team data over the prior.
+        # At 25 games, team data only has 15% weight — prevents small samples from
+        # wildly inflating/deflating probabilities for rare run totals like 12 or 13.
+        team_weight = min(n, 162) / 162
         td = defaultdict(float)
         for r in runs:
             td[r] += 1 / n
@@ -520,7 +522,7 @@ def generate_html(team_runs, first_to_score, win_pct, avg_games, team_run_dist, 
     The race runs until any team completes all 14 slots — it may extend beyond one season.
     "Avg games" = expected games from today until that team finishes.
   </div>
-  <div class="card">
+  <div class="card" style="overflow-x:auto">
     <table class="standings-table">
       <thead>
         <tr>
