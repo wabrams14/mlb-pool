@@ -93,35 +93,23 @@ def build_tracker(game_log):
 # ------------------------------------------------------------------
 
 def build_run_distributions(team_run_dist):
-    # 2026 league average from observed data
-    all_runs = [r for runs in team_run_dist.values() for r in runs]
-    league_obs = defaultdict(float)
-    for r in all_runs:
-        league_obs[r] += 1 / len(all_runs)
-
-    # Blend observed league data with historical prior
-    # At 500+ league games the observed data dominates; early season the prior dominates
-    league_weight = min(len(all_runs), 500) / 500
-    league_dist = {}
-    for r in set(list(league_obs.keys()) + list(HISTORICAL_PRIOR.keys())):
-        league_dist[r] = league_weight * league_obs.get(r, 0) + (1 - league_weight) * HISTORICAL_PRIOR.get(r, 0)
-
+    # Use HISTORICAL_PRIOR directly as the base — it's built from many years of MLB data
+    # and is far more reliable than a single early-season sample for rare run totals.
+    # Team-specific data blends in gradually over a full season (162 games).
+    # At 25 games in, team data has ~15% weight; the prior holds 85%.
     team_dist = {}
     for team, runs in team_run_dist.items():
         n = len(runs)
-        # Require a full season (162 games) before trusting team data over the prior.
-        # At 25 games, team data only has 15% weight — prevents small samples from
-        # wildly inflating/deflating probabilities for rare run totals like 12 or 13.
         team_weight = min(n, 162) / 162
         td = defaultdict(float)
         for r in runs:
             td[r] += 1 / n
         blended = {}
-        for r in set(list(td.keys()) + list(league_dist.keys())):
-            blended[r] = team_weight * td.get(r, 0) + (1 - team_weight) * league_dist.get(r, 0)
+        for r in set(list(td.keys()) + list(HISTORICAL_PRIOR.keys())):
+            blended[r] = team_weight * td.get(r, 0) + (1 - team_weight) * HISTORICAL_PRIOR.get(r, 0)
         team_dist[team] = blended
 
-    return team_dist, league_dist
+    return team_dist, HISTORICAL_PRIOR
 
 
 # ------------------------------------------------------------------
